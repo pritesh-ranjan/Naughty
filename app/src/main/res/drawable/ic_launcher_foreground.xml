@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Card Drop Shadow -->
+    <path
+        android:pathData="M33,32 h24 l15,15 v33 a6,6 0 0 1 -6,6 h-33 a6,6 0 0 1 -6,-6 v-42 a6,6 0 0 1 6,-6 z"
+        android:fillColor="#283A2A1A" />
+
+    <!-- Card Subtle Outer Border for definition on light backgrounds -->
+    <path
+        android:pathData="M32,28 h24 l14,14 v34 a5,5 0 0 1 -5,5 h-33 a5,5 0 0 1 -5,-5 v-43 a5,5 0 0 1 5,-5 z"
+        android:strokeWidth="1"
+        android:strokeColor="#1F3A2A1A" />
+
+    <!-- Main Folded Note Sheet -->
+    <path
+        android:pathData="M32,28 h24 l14,14 v34 a5,5 0 0 1 -5,5 h-33 a5,5 0 0 1 -5,-5 v-43 a5,5 0 0 1 5,-5 z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="32"
+                android:startY="28"
+                android:endX="70"
+                android:endY="81"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#FFFFFF" />
+                <item android:offset="0.6" android:color="#FFFDF9" />
+                <item android:offset="1.0" android:color="#F7F1E6" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Dog-Ear Fold Shadow -->
+    <path
+        android:pathData="M56,28 v10 a4,4 0 0 0 4,4 h10 z"
+        android:fillColor="#22000000" />
+
+    <!-- Dog-Ear Fold Corner Flap -->
+    <path
+        android:pathData="M56,28 v10 a4,4 0 0 0 4,4 h10 z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="56"
+                android:startY="28"
+                android:endX="70"
+                android:endY="42"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#FAF5EE" />
+                <item android:offset="1.0" android:color="#DFD7C7" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Subtle Note Lines at the bottom of the card -->
+    <path
+        android:pathData="M37,70 h20"
+        android:strokeWidth="2"
+        android:strokeColor="#18302010"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M37,74 h13"
+        android:strokeWidth="2"
+        android:strokeColor="#12302010"
+        android:strokeLineCap="round" />
+
+    <!-- Striking Geometric "N" Monogram in Vibrant Sunset/Coral Gradient -->
+    <path
+        android:pathData="M41,63 L41,44 L57,63 L57,44"
+        android:strokeWidth="4.2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:startX="41"
+                android:startY="44"
+                android:endX="57"
+                android:endY="63"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#FF7557" />
+                <item android:offset="0.5" android:color="#FF5733" />
+                <item android:offset="1.0" android:color="#E03E1A" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Contextual Spark/Dot: Glowing golden-amber badge dot on top left -->
+    <path
+        android:pathData="M37,34m-2.2,0a2.2,2.2 0 1,0 4.4,0a2.2,2.2 0 1,0 -4.4,0"
+        android:fillColor="#FFB347" />
+
+</vector>
