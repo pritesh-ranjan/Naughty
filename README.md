@@ -18,6 +18,15 @@
 
 <br/>
 
+<p align="center">
+  <img src="docs/screenshots/dashboard_dark.png" width="23%" alt="Notes Dashboard" />
+  <img src="docs/screenshots/editor_dark.png" width="23%" alt="Markdown Editor" />
+  <img src="docs/screenshots/app_binding.png" width="23%" alt="App Binding" />
+  <img src="docs/screenshots/timeline_tracker.png" width="23%" alt="Timeline Tasks" />
+</p>
+
+<br/>
+
 [Why Naughty?](#-why-naughty) •
 [Features](#-features) •
 [Themes](#-handcrafted-themes) •
