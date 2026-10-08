@@ -799,53 +799,77 @@ fun NoteEditorScreen(
                             Column(
                                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp)
                             ) {
-                            // Title with watercolor highlight & Tag Chip on right
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Box(modifier = Modifier.weight(1f)) {
-                                    BasicTextField(
-                                        value = uiState.title,
-                                        onValueChange = { viewModel.updateTitle(it) },
-                                        textStyle = TextStyle(
-                                            fontFamily = currentTheme.titleFontFamily,
-                                            fontWeight = FontWeight.SemiBold,
-                                            fontSize = 22.sp,
-                                            lineHeight = 28.sp,
-                                            color = currentTheme.textPrimary
-                                        ),
-                                        cursorBrush = SolidColor(currentTheme.cursorColor),
-                                        modifier = Modifier.fillMaxWidth(),
-                                        decorationBox = { innerTextField ->
-                                            if (uiState.title.isEmpty()) {
-                                                Text(
-                                                    text = "Headline",
-                                                    fontFamily = currentTheme.titleFontFamily,
-                                                    fontSize = 22.sp,
-                                                    fontWeight = FontWeight.SemiBold,
-                                                    color = currentTheme.textSecondary.copy(alpha = 0.45f)
-                                                )
-                                            }
-                                            innerTextField()
+                                // Title with watercolor highlight
+                                BasicTextField(
+                                    value = uiState.title,
+                                    onValueChange = { viewModel.updateTitle(it) },
+                                    textStyle = TextStyle(
+                                        fontFamily = currentTheme.titleFontFamily,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 22.sp,
+                                        lineHeight = 28.sp,
+                                        color = currentTheme.textPrimary
+                                    ),
+                                    cursorBrush = SolidColor(currentTheme.cursorColor),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    decorationBox = { innerTextField ->
+                                        if (uiState.title.isEmpty()) {
+                                            Text(
+                                                text = "Headline",
+                                                fontFamily = currentTheme.titleFontFamily,
+                                                fontSize = 22.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = currentTheme.textSecondary.copy(alpha = 0.45f)
+                                            )
                                         }
-                                    )
-                                }
+                                        innerTextField()
+                                    }
+                                )
 
-                                Spacer(modifier = Modifier.width(8.dp))
-
-                                // Bound Apps Section: display all bound apps with modern link icon
+                                // Bound Apps Section & Reminder Chip: displayed neatly underneath title
                                 val boundApps = uiState.boundApps
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    if (boundApps.isNotEmpty()) {
-                                        boundApps.forEach { appName ->
+                                val hasReminder = uiState.reminderTime != null && uiState.reminderTime!! > System.currentTimeMillis()
+                                if (boundApps.isNotEmpty() || hasReminder) {
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        if (boundApps.isNotEmpty()) {
+                                            boundApps.forEach { appName ->
+                                                Surface(
+                                                    shape = RoundedCornerShape(12.dp),
+                                                    color = ElectricCyan.copy(alpha = 0.12f),
+                                                    border = BorderStroke(0.6.dp, ElectricCyan.copy(alpha = 0.35f)),
+                                                    modifier = Modifier
+                                                        .clip(RoundedCornerShape(12.dp))
+                                                        .clickable { onBindingClick() }
+                                                ) {
+                                                    Row(
+                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Outlined.Link,
+                                                            contentDescription = null,
+                                                            tint = ElectricCyan,
+                                                            modifier = Modifier.size(12.dp)
+                                                        )
+                                                        Spacer(modifier = Modifier.width(4.dp))
+                                                        Text(
+                                                            text = appName,
+                                                            fontSize = 11.5.sp,
+                                                            fontWeight = FontWeight.SemiBold,
+                                                            color = ElectricCyan
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                            // Additional + chip to add more bindings
                                             Surface(
                                                 shape = RoundedCornerShape(12.dp),
-                                                color = ElectricCyan.copy(alpha = 0.12f),
+                                                color = Color.Transparent,
                                                 border = BorderStroke(0.6.dp, ElectricCyan.copy(alpha = 0.35f)),
                                                 modifier = Modifier
                                                     .clip(RoundedCornerShape(12.dp))
@@ -855,82 +879,53 @@ fun NoteEditorScreen(
                                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                                     verticalAlignment = Alignment.CenterVertically
                                                 ) {
-                                                    Icon(
-                                                        imageVector = Icons.Outlined.Link,
-                                                        contentDescription = null,
-                                                        tint = ElectricCyan,
-                                                        modifier = Modifier.size(12.dp)
-                                                    )
+                                                    Text("+", fontSize = 12.sp, color = ElectricCyan, fontWeight = FontWeight.Bold)
+                                                }
+                                            }
+                                        }
+
+                                        // Note-level reminder badge chip
+                                        if (hasReminder) {
+                                            val noteReminder = remember(uiState.reminderTime) {
+                                                InlineReminder(
+                                                    rawTag = "",
+                                                    displayText = InlineReminderParser.formatTimestamp(uiState.reminderTime!!),
+                                                    timestampMillis = uiState.reminderTime!!,
+                                                    startIndex = 0,
+                                                    endIndex = 0
+                                                )
+                                            }
+                                            Surface(
+                                                shape = RoundedCornerShape(12.dp),
+                                                color = currentTheme.accent.copy(alpha = 0.14f),
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(12.dp))
+                                                    .clickable {
+                                                        activeSelectionContext = null
+                                                        reminderTargetBlockId = null
+                                                        reminderInitialText = uiState.title.ifBlank { "" }
+                                                        reminderInitialTime = uiState.reminderTime
+                                                        isEditingNoteReminder = true
+                                                        showReminderSheet = true
+                                                    }
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text("🔔", fontSize = 11.5.sp)
                                                     Spacer(modifier = Modifier.width(4.dp))
                                                     Text(
-                                                        text = appName,
+                                                        text = noteReminder.displayText,
                                                         fontSize = 11.5.sp,
-                                                        fontWeight = FontWeight.SemiBold,
-                                                        color = ElectricCyan
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = currentTheme.accent
                                                     )
                                                 }
-                                            }
-                                        }
-                                        // Additional + chip to add more bindings
-                                        Surface(
-                                            shape = RoundedCornerShape(12.dp),
-                                            color = Color.Transparent,
-                                            border = BorderStroke(0.6.dp, ElectricCyan.copy(alpha = 0.35f)),
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(12.dp))
-                                                .clickable { onBindingClick() }
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Text("+", fontSize = 12.sp, color = ElectricCyan, fontWeight = FontWeight.Bold)
-                                            }
-                                        }
-                                    }
-
-                                    // Note-level reminder badge chip
-                                    if (uiState.reminderTime != null && uiState.reminderTime!! > System.currentTimeMillis()) {
-                                        val noteReminder = remember(uiState.reminderTime) {
-                                            InlineReminder(
-                                                rawTag = "",
-                                                displayText = InlineReminderParser.formatTimestamp(uiState.reminderTime!!),
-                                                timestampMillis = uiState.reminderTime!!,
-                                                startIndex = 0,
-                                                endIndex = 0
-                                            )
-                                        }
-                                        Surface(
-                                            shape = RoundedCornerShape(12.dp),
-                                            color = currentTheme.accent.copy(alpha = 0.14f),
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(12.dp))
-                                                .clickable {
-                                                    activeSelectionContext = null
-                                                    reminderTargetBlockId = null
-                                                    reminderInitialText = uiState.title.ifBlank { "" }
-                                                    reminderInitialTime = uiState.reminderTime
-                                                    isEditingNoteReminder = true
-                                                    showReminderSheet = true
-                                                }
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Text("🔔", fontSize = 11.5.sp)
-                                                Spacer(modifier = Modifier.width(4.dp))
-                                                Text(
-                                                    text = noteReminder.displayText,
-                                                    fontSize = 11.5.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = currentTheme.accent
-                                                )
                                             }
                                         }
                                     }
                                 }
-                            }
 
                             Spacer(modifier = Modifier.height(16.dp))
 
