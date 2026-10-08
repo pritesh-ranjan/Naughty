@@ -37,13 +37,12 @@ To protect users against supply-chain attacks or tampered binaries, all official
 
 ### Official Certificate Fingerprints
 
-* **Certificate Owner**: `CN=Naughty FOSS, OU=Release, O=Naughty Open Source, L=Local, ST=State, C=US`
-* **Algorithm**: RSA 2048-bit with SHA-384
-* **Valid Through**: February 22, 2054
+* **Certificate Owner**: `CN=Android Debug, O=Android, C=US`
+* **Algorithm**: RSA 2048-bit
 * **SHA-256 Fingerprint**:  
-  `7A:1C:0C:93:A9:93:D8:93:48:67:5C:C3:78:C7:57:8A:6C:BA:12:30:E7:2B:93:19:71:74:F4:66:36:7D:E9:FA`
+  `D9:0C:E1:4A:43:37:48:1A:80:CF:5E:33:D5:DF:4F:E8:B3:E8:8D:32:3B:15:2F:63:E4:A0:90:60:5E:63:60:69`
 * **SHA-1 Fingerprint**:  
-  `E5:2B:EE:15:43:A5:A5:95:AF:8D:91:41:E6:75:04:CB:40:E3:81:EA`
+  `FC:E7:F7:CC:36:7D:B9:B5:62:6B:5D:B1:9D:E6:F8:E4:D0:14:AA:F2`
 
 ### How to Verify an APK Before Installation
 
@@ -57,7 +56,7 @@ apksigner verify --verbose --print-certs Naughty-v*-release.apk
 1. `Verified using v2 scheme (APK Signature Scheme v2): true`
 2. `Verified using v3 scheme (APK Signature Scheme v3): true`
 3. The SHA-256 digest exactly matches:  
-   `7a1c0c93a993d89348675cc378c7578a6cba1230e72b93197174f466367de9fa`
+   `d90ce14a4337481a80cf5e33d5df4fe8b3e88d323b152f63e4a090605e636069`
 
 ---
 
