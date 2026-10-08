@@ -15,3 +15,15 @@
 local.properties
 .kotlin
 *.apk
+*.aab
+
+# Production Release Signing (Keys and passwords)
+*.keystore*
+*.jks
+*.p12
+release.keystore*
+keystore.properties
+
+# Device backup dumps
+device_backup/
+.device_backup/

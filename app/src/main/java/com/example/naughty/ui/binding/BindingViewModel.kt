@@ -140,18 +140,14 @@ class BindingViewModel(
                 addCategory(Intent.CATEGORY_LAUNCHER)
             }
             val launcherActivities = packageManager.queryIntentActivities(launcherIntent, 0)
-            val launcherPackages = launcherActivities.map { it.activityInfo.packageName }.toSet()
-
-            packageManager.getInstalledApplications(PackageManager.GET_META_DATA)
-                .filter { appInfo ->
-                    appInfo.packageName != context.packageName &&
-                        (launcherPackages.contains(appInfo.packageName) ||
-                            (appInfo.flags and ApplicationInfo.FLAG_SYSTEM == 0))
-                }
-                .map { appInfo ->
+            launcherActivities
+                .mapNotNull { resolveInfo ->
+                    val pkg = resolveInfo.activityInfo?.packageName ?: return@mapNotNull null
+                    if (pkg == context.packageName) return@mapNotNull null
+                    val label = resolveInfo.loadLabel(packageManager).toString()
                     InstalledApp(
-                        packageName = appInfo.packageName,
-                        label = packageManager.getApplicationLabel(appInfo).toString()
+                        packageName = pkg,
+                        label = label
                     )
                 }
                 .distinctBy { it.packageName }

@@ -8,9 +8,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.BrightnessAuto
+import androidx.compose.material.icons.outlined.DarkMode
+import androidx.compose.material.icons.outlined.LightMode
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -27,10 +32,10 @@ fun ThemeToggle(
 ) {
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(999.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
+            .padding(3.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         ThemeMode.entries.forEach { mode ->
@@ -43,31 +48,32 @@ fun ThemeToggle(
                 animationSpec = tween(200),
                 label = "themeBg"
             )
-            val textColor by animateColorAsState(
+            val iconTint by animateColorAsState(
                 targetValue = if (isSelected)
                     MaterialTheme.colorScheme.onPrimary
                 else
                     MaterialTheme.colorScheme.onSurfaceVariant,
                 animationSpec = tween(200),
-                label = "themeText"
+                label = "themeIconTint"
             )
 
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(999.dp))
                     .background(bgColor)
                     .clickable { onModeSelected(mode) }
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(horizontal = 14.dp, vertical = 7.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = when (mode) {
-                        ThemeMode.LIGHT -> "☀️"
-                        ThemeMode.DARK -> "🌙"
-                        ThemeMode.AUTO -> "Auto"
+                Icon(
+                    imageVector = when (mode) {
+                        ThemeMode.LIGHT -> Icons.Outlined.LightMode
+                        ThemeMode.DARK -> Icons.Outlined.DarkMode
+                        ThemeMode.AUTO -> Icons.Outlined.BrightnessAuto
                     },
-                    style = MaterialTheme.typography.labelLarge,
-                    color = textColor
+                    contentDescription = mode.name,
+                    tint = iconTint,
+                    modifier = Modifier.size(18.dp)
                 )
             }
         }

@@ -172,4 +172,134 @@ class EditorBlockTest {
         val ids = blocks.map { it.id }.toSet()
         assertEquals(3, ids.size)
     }
+
+    @Test
+    fun testMultilineChecklistItem_serializationAndParsing() {
+        val multilineChecklist = EditorBlock.Checklist(
+            text = "Buy ingredients for pasta\nFresh tomatoes and basil\nOlive oil and garlic"
+        )
+        val markdown = EditorBlockParser.toMarkdown(listOf(multilineChecklist))
+        val expectedMarkdown = """
+            - [ ] Buy ingredients for pasta
+              Fresh tomatoes and basil
+              Olive oil and garlic
+        """.trimIndent()
+        assertEquals(expectedMarkdown, markdown)
+
+        val reparsed = EditorBlockParser.parse(markdown)
+        assertEquals(1, reparsed.size)
+        assertTrue(reparsed[0] is EditorBlock.Checklist)
+        val reparsedItem = reparsed[0] as EditorBlock.Checklist
+        assertEquals("Buy ingredients for pasta\nFresh tomatoes and basil\nOlive oil and garlic", reparsedItem.text)
+        assertFalse(reparsedItem.isChecked)
+    }
+
+    @Test
+    fun testMultilineChecklistItemWithReminder() {
+        val timestamp = 1750000000000L
+        val tag = InlineReminderParser.createReminderTag(timestamp, "Tomorrow, 9:00 AM")
+        val input = """
+            - [ ] Review quarterly budget
+              Verify spreadsheet numbers $tag
+            - [ ] Send summary email
+        """.trimIndent()
+
+        val blocks = EditorBlockParser.parse(input)
+        assertEquals(2, blocks.size)
+        assertTrue(blocks[0] is EditorBlock.Checklist)
+        assertTrue(blocks[1] is EditorBlock.Checklist)
+
+        val task1 = blocks[0] as EditorBlock.Checklist
+        val task2 = blocks[1] as EditorBlock.Checklist
+
+        assertEquals("Review quarterly budget\nVerify spreadsheet numbers", task1.text)
+        assertNotNull(task1.reminder)
+        assertEquals(timestamp, task1.reminder?.timestampMillis)
+
+        assertEquals("Send summary email", task2.text)
+        assertNull(task2.reminder)
+
+        val reserialized = EditorBlockParser.toMarkdown(blocks)
+        assertEquals(input, reserialized)
+    }
+
+    @Test
+    fun testVoiceNoteParsingAndExtraction() {
+        val voiceUri1 = "file:///data/user/0/com.example.naughty/files/note_audio/audio_1.opus"
+        val voiceUri2 = "file:///data/user/0/com.example.naughty/files/note_audio/audio_2.m4a"
+        val input = """
+            Meeting discussion summary
+
+            - [ ] Complete team retro notes
+
+            [🎤 Voice Note]($voiceUri1)
+            [Voice Note]($voiceUri2)
+        """.trimIndent()
+
+        // 1. Verify extractVoiceNotes
+        val voiceNotes = EditorBlockParser.extractVoiceNotes(input)
+        assertEquals(2, voiceNotes.size)
+        assertEquals(voiceUri1, voiceNotes[0])
+        assertEquals(voiceUri2, voiceNotes[1])
+
+        // 2. Verify parse excludes voice note lines from body blocks
+        val blocks = EditorBlockParser.parse(input)
+        assertEquals(2, blocks.size)
+        assertTrue(blocks[0] is EditorBlock.Text)
+        assertTrue(blocks[1] is EditorBlock.Checklist)
+        assertEquals("Meeting discussion summary", (blocks[0] as EditorBlock.Text).text.trim())
+
+        // 3. Verify toMarkdown serializes cleanly
+        val serialized = EditorBlockParser.toMarkdown(
+            blocks = blocks,
+            attachedImages = emptyList(),
+            attachedVoiceNotes = voiceNotes
+        )
+        assertTrue(serialized.contains("[🎤 Voice Note]($voiceUri1)"))
+        assertTrue(serialized.contains("[🎤 Voice Note]($voiceUri2)"))
+    }
+
+    @Test
+    fun testVoiceNoteWithImagesAndChecklistsRoundtrip() {
+        val imageUri = "file:///data/user/0/com.example.naughty/files/note_images/img_1.jpg"
+        val voiceUri = "file:///data/user/0/com.example.naughty/files/note_audio/audio_1.opus"
+        val input = """
+            Project Kickoff
+
+            - [ ] Align on API contract
+            - [x] Create repository
+
+            ![Image]($imageUri)
+
+            [🎤 Voice Note]($voiceUri)
+        """.trimIndent()
+
+        val images = EditorBlockParser.extractImages(input)
+        val voiceNotes = EditorBlockParser.extractVoiceNotes(input)
+        val blocks = EditorBlockParser.parse(input)
+
+        assertEquals(1, images.size)
+        assertEquals(imageUri, images[0])
+
+        assertEquals(1, voiceNotes.size)
+        assertEquals(voiceUri, voiceNotes[0])
+
+        assertEquals(3, blocks.size) // 1 Text block ("Project Kickoff"), 2 Checklist blocks
+        assertTrue(blocks[0] is EditorBlock.Text)
+        assertTrue(blocks[1] is EditorBlock.Checklist)
+        assertTrue(blocks[2] is EditorBlock.Checklist)
+
+        val reserialized = EditorBlockParser.toMarkdown(blocks, images, voiceNotes)
+        assertTrue(reserialized.contains("![Image]($imageUri)"))
+        assertTrue(reserialized.contains("[🎤 Voice Note]($voiceUri)"))
+    }
+
+    @Test
+    fun testNormalizeAmplitudes() {
+        val samples = listOf(0.1f, 0.4f, 0.8f, 0.2f, 0.9f)
+        val normalized = com.example.naughty.util.AudioRecorderHelper.normalizeAmplitudes(samples, targetCount = 10)
+        assertEquals(10, normalized.size)
+        assertTrue(normalized.all { it in 0.05f..1.0f })
+    }
 }
+

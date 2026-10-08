@@ -36,6 +36,7 @@ import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.LooksOne
 import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material.icons.outlined.Search
@@ -70,6 +71,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.naughty.data.local.BindingType
+import com.example.naughty.ui.theme.AmoledBlack
+import com.example.naughty.ui.theme.CrystalWhite
+import com.example.naughty.ui.theme.ElectricAmber
+import com.example.naughty.ui.theme.ElectricCyan
+import com.example.naughty.ui.theme.ElectricGreen
+import com.example.naughty.ui.theme.ElectricPink
+import com.example.naughty.ui.theme.isAppInDarkTheme
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -85,6 +93,7 @@ fun BindingSheet(
     val uiState by viewModel.uiState.collectAsState()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val context = LocalContext.current
+    val isDark = isAppInDarkTheme()
 
     LaunchedEffect(noteId) {
         viewModel.loadForNote(noteId)
@@ -115,7 +124,7 @@ fun BindingSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surface
+        containerColor = if (isDark) AmoledBlack else CrystalWhite
     ) {
         Column(
             modifier = Modifier
@@ -123,22 +132,24 @@ fun BindingSheet(
                 .padding(horizontal = 20.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "🔗",
-                    fontSize = 20.sp
+                Icon(
+                    imageVector = Icons.Outlined.Link,
+                    contentDescription = null,
+                    tint = ElectricCyan,
+                    modifier = Modifier.size(22.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = "App Context Binding",
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = if (isDark) CrystalWhite else AmoledBlack
                 )
             }
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = "Surface this note when you open a specific application",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                color = if (isDark) Color(0xFF888888) else Color(0xFF666666)
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -151,9 +162,9 @@ fun BindingSheet(
                     text = "UNTIL WHEN TO BIND",
                     style = MaterialTheme.typography.labelSmall.copy(
                         letterSpacing = 1.2.sp,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.Bold
                     ),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = if (isDark) ElectricGreen else AmoledBlack
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -165,11 +176,11 @@ fun BindingSheet(
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(14.dp))
                             .clickable { showExpirationDropdown = true },
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
+                        shape = RoundedCornerShape(14.dp),
+                        color = if (isDark) Color(0xFF0C0C0E) else Color(0xFFF4F4F6),
+                        border = BorderStroke(0.6.dp, if (isDark) Color(0xFF1E1E24) else Color(0xFFE4E4E7))
                     ) {
                         Row(
                             modifier = Modifier
@@ -187,7 +198,7 @@ fun BindingSheet(
                                         BindingModeOption.ONE_SHOT -> Icons.Outlined.LooksOne
                                     },
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
+                                    tint = ElectricCyan,
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Spacer(modifier = Modifier.width(10.dp))
@@ -195,7 +206,7 @@ fun BindingSheet(
                                     Text(
                                         text = "Binding mode",
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = if (isDark) Color(0xFF777777) else Color(0xFF888888)
                                     )
                                     Text(
                                         text = when (uiState.currentMode) {
@@ -205,7 +216,7 @@ fun BindingSheet(
                                             BindingModeOption.ONE_SHOT -> "One-shot (fires once)"
                                         },
                                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                                        color = MaterialTheme.colorScheme.onSurface
+                                        color = if (isDark) CrystalWhite else AmoledBlack
                                     )
                                 }
                             }
@@ -213,7 +224,7 @@ fun BindingSheet(
                             Icon(
                                 imageVector = Icons.Outlined.ArrowDropDown,
                                 contentDescription = "Change",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                tint = if (isDark) Color(0xFF888888) else Color(0xFF666666),
                                 modifier = Modifier.size(24.dp)
                             )
                         }
@@ -224,7 +235,7 @@ fun BindingSheet(
                         onDismissRequest = { showExpirationDropdown = false },
                         modifier = Modifier
                             .fillMaxWidth(0.85f)
-                            .background(MaterialTheme.colorScheme.surface)
+                            .background(if (isDark) AmoledBlack else CrystalWhite)
                     ) {
                         DropdownMenuItem(
                             text = {
@@ -241,7 +252,7 @@ fun BindingSheet(
                                 Icon(
                                     imageVector = Icons.Outlined.AllInclusive,
                                     contentDescription = null,
-                                    tint = if (uiState.currentMode == BindingModeOption.ALWAYS_ACTIVE) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    tint = if (uiState.currentMode == BindingModeOption.ALWAYS_ACTIVE) ElectricCyan else (if (isDark) Color(0xFF777777) else Color(0xFF888888)),
                                     modifier = Modifier.size(20.dp)
                                 )
                             },
@@ -250,7 +261,7 @@ fun BindingSheet(
                                     Icon(
                                         imageVector = Icons.Outlined.Check,
                                         contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
+                                        tint = ElectricGreen,
                                         modifier = Modifier.size(18.dp)
                                     )
                                 }
@@ -267,7 +278,7 @@ fun BindingSheet(
                                     Text(
                                         "Set days, weeks, or months",
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = if (isDark) Color(0xFF777777) else Color(0xFF888888)
                                     )
                                 }
                             },
@@ -275,7 +286,7 @@ fun BindingSheet(
                                 Icon(
                                     imageVector = Icons.Outlined.Timer,
                                     contentDescription = null,
-                                    tint = if (uiState.currentMode == BindingModeOption.DURATION) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    tint = if (uiState.currentMode == BindingModeOption.DURATION) ElectricCyan else (if (isDark) Color(0xFF777777) else Color(0xFF888888)),
                                     modifier = Modifier.size(20.dp)
                                 )
                             },
@@ -284,7 +295,7 @@ fun BindingSheet(
                                     Icon(
                                         imageVector = Icons.Outlined.Check,
                                         contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
+                                        tint = ElectricGreen,
                                         modifier = Modifier.size(18.dp)
                                     )
                                 }
@@ -301,7 +312,7 @@ fun BindingSheet(
                                     Text(
                                         "Choose a specific end date",
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = if (isDark) Color(0xFF777777) else Color(0xFF888888)
                                     )
                                 }
                             },
@@ -309,7 +320,7 @@ fun BindingSheet(
                                 Icon(
                                     imageVector = Icons.Outlined.CalendarMonth,
                                     contentDescription = null,
-                                    tint = if (uiState.currentMode == BindingModeOption.DATE_PICKER) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    tint = if (uiState.currentMode == BindingModeOption.DATE_PICKER) ElectricCyan else (if (isDark) Color(0xFF777777) else Color(0xFF888888)),
                                     modifier = Modifier.size(20.dp)
                                 )
                             },
@@ -318,7 +329,7 @@ fun BindingSheet(
                                     Icon(
                                         imageVector = Icons.Outlined.Check,
                                         contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
+                                        tint = ElectricGreen,
                                         modifier = Modifier.size(18.dp)
                                     )
                                 }
@@ -335,7 +346,7 @@ fun BindingSheet(
                                     Text(
                                         "Fires once on next open, then expires",
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = if (isDark) Color(0xFF777777) else Color(0xFF888888)
                                     )
                                 }
                             },
@@ -343,7 +354,7 @@ fun BindingSheet(
                                 Icon(
                                     imageVector = Icons.Outlined.LooksOne,
                                     contentDescription = null,
-                                    tint = if (uiState.currentMode == BindingModeOption.ONE_SHOT) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    tint = if (uiState.currentMode == BindingModeOption.ONE_SHOT) ElectricCyan else (if (isDark) Color(0xFF777777) else Color(0xFF888888)),
                                     modifier = Modifier.size(20.dp)
                                 )
                             },
@@ -352,7 +363,7 @@ fun BindingSheet(
                                     Icon(
                                         imageVector = Icons.Outlined.Check,
                                         contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
+                                        tint = ElectricGreen,
                                         modifier = Modifier.size(18.dp)
                                     )
                                 }
@@ -371,11 +382,11 @@ fun BindingSheet(
                 if (uiState.currentMode == BindingModeOption.DURATION) {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                        shape = RoundedCornerShape(14.dp),
+                        color = if (isDark) Color(0xFF0C0C0E) else Color(0xFFF4F4F6),
+                        border = BorderStroke(0.6.dp, if (isDark) Color(0xFF1E1E24) else Color(0xFFE4E4E7))
                     ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
+                        Column(modifier = Modifier.padding(14.dp)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically,
@@ -384,7 +395,7 @@ fun BindingSheet(
                                 Text(
                                     text = "Duration amount:",
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    color = if (isDark) CrystalWhite else AmoledBlack
                                 )
 
                                 // Stepper [-] [ count ] [+]
@@ -396,7 +407,7 @@ fun BindingSheet(
                                         modifier = Modifier
                                             .size(32.dp)
                                             .clip(CircleShape)
-                                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                                            .background(if (isDark) Color(0xFF18181B) else Color(0xFFE4E4E7))
                                             .clickable {
                                                 if (uiState.durationNumber > 1) {
                                                     viewModel.setDurationNumber(uiState.durationNumber - 1)
@@ -408,14 +419,14 @@ fun BindingSheet(
                                             imageVector = Icons.Outlined.Remove,
                                             contentDescription = "Decrease",
                                             modifier = Modifier.size(16.dp),
-                                            tint = MaterialTheme.colorScheme.onSurface
+                                            tint = if (isDark) CrystalWhite else AmoledBlack
                                         )
                                     }
 
                                     Text(
                                         text = "${uiState.durationNumber}",
                                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                        color = MaterialTheme.colorScheme.onSurface,
+                                        color = if (isDark) CrystalWhite else AmoledBlack,
                                         modifier = Modifier.padding(horizontal = 4.dp)
                                     )
 
@@ -423,7 +434,7 @@ fun BindingSheet(
                                         modifier = Modifier
                                             .size(32.dp)
                                             .clip(CircleShape)
-                                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                                            .background(if (isDark) Color(0xFF18181B) else Color(0xFFE4E4E7))
                                             .clickable {
                                                 viewModel.setDurationNumber(uiState.durationNumber + 1)
                                             },
@@ -433,7 +444,7 @@ fun BindingSheet(
                                             imageVector = Icons.Outlined.Add,
                                             contentDescription = "Increase",
                                             modifier = Modifier.size(16.dp),
-                                            tint = MaterialTheme.colorScheme.onSurface
+                                            tint = if (isDark) CrystalWhite else AmoledBlack
                                         )
                                     }
                                 }
@@ -453,8 +464,8 @@ fun BindingSheet(
                                             .weight(1f)
                                             .clip(RoundedCornerShape(8.dp))
                                             .background(
-                                                if (isUnitSelected) MaterialTheme.colorScheme.primary
-                                                else MaterialTheme.colorScheme.surface
+                                                if (isUnitSelected) (if (isDark) ElectricGreen else AmoledBlack)
+                                                else (if (isDark) Color(0xFF141416) else Color(0xFFE8E8EC))
                                             )
                                             .clickable { viewModel.setDurationUnit(unit) }
                                             .padding(vertical = 6.dp),
@@ -462,21 +473,22 @@ fun BindingSheet(
                                     ) {
                                         Text(
                                             text = unit.label,
-                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                                            color = if (isUnitSelected) MaterialTheme.colorScheme.onPrimary
-                                            else MaterialTheme.colorScheme.onSurface
+                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                            color = if (isUnitSelected) (if (isDark) AmoledBlack else CrystalWhite)
+                                            else (if (isDark) CrystalWhite else AmoledBlack)
                                         )
                                     }
                                 }
                             }
 
-                            Spacer(modifier = Modifier.height(6.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
 
                             val expDate = calculateDurationDate(uiState.durationNumber, uiState.durationUnit)
                             Text(
                                 text = "Expires in ${uiState.durationNumber} ${uiState.durationUnit.label.lowercase()} • $expDate",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary
+                                color = ElectricCyan,
+                                fontWeight = FontWeight.Medium
                             )
                         }
                     }
@@ -488,9 +500,9 @@ fun BindingSheet(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { datePickerDialog.show() },
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                        shape = RoundedCornerShape(14.dp),
+                        color = if (isDark) Color(0xFF0C0C0E) else Color(0xFFF4F4F6),
+                        border = BorderStroke(0.6.dp, if (isDark) Color(0xFF1E1E24) else Color(0xFFE4E4E7))
                     ) {
                         Row(
                             modifier = Modifier
@@ -503,7 +515,7 @@ fun BindingSheet(
                                 Icon(
                                     imageVector = Icons.Outlined.CalendarMonth,
                                     contentDescription = "Select Date",
-                                    tint = MaterialTheme.colorScheme.primary,
+                                    tint = ElectricCyan,
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Spacer(modifier = Modifier.width(10.dp))
@@ -511,20 +523,20 @@ fun BindingSheet(
                                     Text(
                                         text = "Bound until date:",
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = if (isDark) Color(0xFF777777) else Color(0xFF888888)
                                     )
                                     Text(
                                         text = uiState.selectedDateMillis?.let { formatDate(it) } ?: "Select date",
                                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                                        color = MaterialTheme.colorScheme.onSurface
+                                        color = if (isDark) CrystalWhite else AmoledBlack
                                     )
                                 }
                             }
 
                             Text(
                                 text = "Change",
-                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                                color = MaterialTheme.colorScheme.primary
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                color = ElectricCyan
                             )
                         }
                     }
@@ -534,9 +546,9 @@ fun BindingSheet(
                 if (uiState.currentMode == BindingModeOption.ONE_SHOT) {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                        shape = RoundedCornerShape(14.dp),
+                        color = if (isDark) Color(0xFF0C0C0E) else Color(0xFFF4F4F6),
+                        border = BorderStroke(0.6.dp, if (isDark) Color(0xFF1E1E24) else Color(0xFFE4E4E7))
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
@@ -545,14 +557,14 @@ fun BindingSheet(
                             Icon(
                                 imageVector = Icons.Outlined.Info,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
+                                tint = ElectricAmber,
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Text(
                                 text = "This note will be shown once when you open the target app, and won't appear again.",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = if (isDark) Color(0xFFAAAAAA) else Color(0xFF555555)
                             )
                         }
                     }
@@ -567,15 +579,20 @@ fun BindingSheet(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(bottom = 6.dp)
                 ) {
-                    Text("🔗", fontSize = 12.sp)
+                    Icon(
+                        imageVector = Icons.Outlined.Link,
+                        contentDescription = null,
+                        tint = ElectricCyan,
+                        modifier = Modifier.size(14.dp)
+                    )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = "ACTIVE BINDINGS",
                         style = MaterialTheme.typography.labelSmall.copy(
                             letterSpacing = 1.2.sp,
-                            fontWeight = FontWeight.SemiBold
+                            fontWeight = FontWeight.Bold
                         ),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = if (isDark) ElectricGreen else AmoledBlack
                     )
                 }
 
@@ -588,12 +605,17 @@ fun BindingSheet(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("🔗", fontSize = 13.sp)
-                                Spacer(modifier = Modifier.width(5.dp))
+                                Icon(
+                                    imageVector = Icons.Outlined.Link,
+                                    contentDescription = null,
+                                    tint = ElectricCyan,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = binding.appLabel,
-                                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                                    color = if (isDark) CrystalWhite else AmoledBlack
                                 )
                             }
                             val detail = when (binding.type) {
@@ -618,8 +640,8 @@ fun BindingSheet(
                                 text = detail,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = if (binding.expiresAt != null && binding.expiresAt < System.currentTimeMillis())
-                                    MaterialTheme.colorScheme.error
-                                else MaterialTheme.colorScheme.onSurfaceVariant
+                                    ElectricPink
+                                else (if (isDark) Color(0xFF888888) else Color(0xFF666666))
                             )
                         }
                         IconButton(
@@ -629,17 +651,14 @@ fun BindingSheet(
                             Icon(
                                 imageVector = Icons.Outlined.DeleteOutline,
                                 contentDescription = "Remove",
-                                tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
+                                tint = ElectricPink,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
                     }
                 }
 
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 10.dp),
-                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
-                )
+                Spacer(modifier = Modifier.height(12.dp))
             }
 
             // Search Bar
@@ -647,20 +666,21 @@ fun BindingSheet(
                 value = uiState.searchQuery,
                 onValueChange = { viewModel.updateSearch(it) },
                 textStyle = MaterialTheme.typography.bodyMedium.copy(
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = if (isDark) CrystalWhite else AmoledBlack
                 ),
-                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                cursorBrush = SolidColor(if (isDark) ElectricGreen else AmoledBlack),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(if (isDark) Color(0xFF0C0C0E) else Color(0xFFF4F4F6))
+                    .border(BorderStroke(0.6.dp, if (isDark) Color(0xFF1E1E24) else Color(0xFFE4E4E7)), RoundedCornerShape(14.dp))
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
                 decorationBox = { innerTextField ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             imageVector = Icons.Outlined.Search,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = if (isDark) ElectricGreen else AmoledBlack,
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(10.dp))
@@ -669,7 +689,7 @@ fun BindingSheet(
                                 Text(
                                     "Search all installed apps…",
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                    color = if (isDark) Color(0xFF666666) else Color(0xFF999999)
                                 )
                             }
                             innerTextField()
@@ -682,7 +702,7 @@ fun BindingSheet(
                                 Icon(
                                     imageVector = Icons.Outlined.Close,
                                     contentDescription = "Clear search",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    tint = if (isDark) Color(0xFF888888) else Color(0xFF666666),
                                     modifier = Modifier.size(16.dp)
                                 )
                             }
@@ -691,7 +711,7 @@ fun BindingSheet(
                 }
             )
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             // App list section header
             Row(
@@ -705,7 +725,7 @@ fun BindingSheet(
                             modifier = Modifier
                                 .size(8.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFF4CAF50))
+                                .background(ElectricGreen)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                     }
@@ -715,10 +735,10 @@ fun BindingSheet(
                         else "ALL INSTALLED APPS (${uiState.displayedApps.size})",
                         style = MaterialTheme.typography.labelSmall.copy(
                             letterSpacing = 1.2.sp,
-                            fontWeight = FontWeight.SemiBold
+                            fontWeight = FontWeight.Bold
                         ),
-                        color = if (uiState.isShowingOpenApps) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant
+                        color = if (uiState.isShowingOpenApps) ElectricGreen
+                        else (if (isDark) Color(0xFF888888) else Color(0xFF666666))
                     )
                 }
 
@@ -726,12 +746,12 @@ fun BindingSheet(
                     Text(
                         text = "Search to view all",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        color = if (isDark) Color(0xFF777777) else Color(0xFF888888)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             // App list
             if (uiState.isLoading) {
@@ -744,7 +764,7 @@ fun BindingSheet(
                     CircularProgressIndicator(
                         modifier = Modifier.size(28.dp),
                         strokeWidth = 2.5.dp,
-                        color = MaterialTheme.colorScheme.primary
+                        color = if (isDark) ElectricGreen else AmoledBlack
                     )
                 }
             } else if (uiState.displayedApps.isEmpty()) {
@@ -759,7 +779,7 @@ fun BindingSheet(
                             "No recently open apps detected.\nType in the search bar above to select from all apps."
                         else "No apps found matching '${uiState.searchQuery}'",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        color = if (isDark) Color(0xFF777777) else Color(0xFF888888),
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
                 }
@@ -773,46 +793,53 @@ fun BindingSheet(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(RoundedCornerShape(10.dp))
                                 .clickable(enabled = !alreadyBound) { viewModel.addBinding(app) }
-                                .padding(horizontal = 4.dp, vertical = 9.dp),
+                                .padding(horizontal = 6.dp, vertical = 9.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = app.label,
-                                    style = MaterialTheme.typography.bodyLarge,
+                                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
                                     color = if (alreadyBound)
-                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
-                                    else MaterialTheme.colorScheme.onSurface,
+                                        (if (isDark) Color(0xFF555555) else Color(0xFFAAAAAA))
+                                    else (if (isDark) CrystalWhite else AmoledBlack),
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
                                     text = app.packageName,
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                                    color = if (isDark) Color(0xFF666666) else Color(0xFF888888),
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
                             }
 
                             if (alreadyBound) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = ElectricGreen.copy(alpha = 0.12f),
+                                    border = BorderStroke(0.5.dp, ElectricGreen.copy(alpha = 0.35f))
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.Check,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Text(
-                                        text = "Bound",
-                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Check,
+                                            contentDescription = null,
+                                            tint = ElectricGreen,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                        Text(
+                                            text = "Bound",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                            color = ElectricGreen
+                                        )
+                                    }
                                 }
                             }
                         }

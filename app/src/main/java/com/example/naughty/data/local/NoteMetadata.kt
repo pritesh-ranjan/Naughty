@@ -17,5 +17,6 @@ data class NoteMetadata(
     @ColumnInfo(defaultValue = "peach") val colorTheme: String = "peach",
     @ColumnInfo(defaultValue = "modular") val cardType: String = "modular",
     @ColumnInfo(defaultValue = "0") val isDeleted: Boolean = false,
-    @ColumnInfo(defaultValue = "NULL") val reminderTime: Long? = null
+    @ColumnInfo(defaultValue = "NULL") val reminderTime: Long? = null,
+    @ColumnInfo(defaultValue = "0") val isLocked: Boolean = false
 )

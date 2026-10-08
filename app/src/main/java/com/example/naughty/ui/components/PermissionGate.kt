@@ -60,6 +60,7 @@ fun hasNotificationPermission(context: Context): Boolean {
 
 @Composable
 fun PermissionGate(
+    bypass: Boolean = false,
     onAllGranted: @Composable () -> Unit
 ) {
     val context = LocalContext.current
@@ -85,7 +86,7 @@ fun PermissionGate(
         }
     }
 
-    if ((hasUsageStats && hasNotifications) || dismissed) {
+    if ((hasUsageStats && hasNotifications) || dismissed || bypass) {
         onAllGranted()
     } else {
         AnimatedVisibility(

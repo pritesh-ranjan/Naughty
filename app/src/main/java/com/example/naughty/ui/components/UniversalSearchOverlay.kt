@@ -37,6 +37,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.Link
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -65,11 +66,21 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.naughty.data.local.NoteMetadata
+import com.example.naughty.ui.theme.AmoledBlack
+import com.example.naughty.ui.theme.CrystalWhite
+import com.example.naughty.ui.theme.ElectricAmber
+import com.example.naughty.ui.theme.ElectricCyan
+import com.example.naughty.ui.theme.ElectricGreen
 import com.example.naughty.ui.theme.getNoteColorPalette
 import com.example.naughty.ui.theme.isAppInDarkTheme
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
+import com.example.naughty.util.BiometricAuthHelper
+import com.example.naughty.util.NoteLockSession
+import com.example.naughty.util.findFragmentActivity
 import kotlinx.coroutines.delay
 
 @Composable
@@ -78,13 +89,18 @@ fun UniversalSearchOverlay(
     notes: List<NoteMetadata>,
     rawContents: Map<String, String>,
     boundApps: Map<String, String>,
+    trackers: List<com.example.naughty.data.local.timeline.TimelineTracker> = emptyList(),
+    milestones: List<com.example.naughty.data.local.timeline.TimelineMilestone> = emptyList(),
     onNoteClick: (String) -> Unit,
+    onTrackerClick: (String) -> Unit = {},
     onDismiss: () -> Unit
 ) {
     if (!isOpen) return
 
     BackHandler { onDismiss() }
 
+    val context = LocalContext.current
+    val activity = remember(context) { context.findFragmentActivity() }
     var query by remember { mutableStateOf("") }
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
@@ -114,6 +130,39 @@ fun UniversalSearchOverlay(
         }
     }
 
+    val matchingTrackers = remember(query, trackers, milestones) {
+        val q = query.trim().lowercase()
+        if (q.isEmpty()) {
+            emptyList<Pair<com.example.naughty.data.local.timeline.TimelineTracker, String>>()
+        } else {
+            val trackerMap = trackers.associateBy { it.id }
+            val results = mutableListOf<Pair<com.example.naughty.data.local.timeline.TimelineTracker, String>>()
+            val seenTrackerIds = mutableSetOf<String>()
+
+            for (t in trackers) {
+                if (t.title.lowercase().contains(q) || t.description.lowercase().contains(q)) {
+                    val snippet = if (t.description.isNotBlank()) t.description else "Timeline Tracker"
+                    results.add(Pair(t, snippet))
+                    seenTrackerIds.add(t.id)
+                }
+            }
+
+            for (m in milestones) {
+                if (m.trackerId !in seenTrackerIds) {
+                    if (m.title.lowercase().contains(q) || m.note.lowercase().contains(q)) {
+                        val parent = trackerMap[m.trackerId]
+                        if (parent != null) {
+                            results.add(Pair(parent, "Milestone: ${m.title}"))
+                            seenTrackerIds.add(parent.id)
+                        }
+                    }
+                }
+            }
+
+            results
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -131,10 +180,10 @@ fun UniversalSearchOverlay(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable(enabled = false) {} // Prevent click-through to scrim
-                    .shadow(20.dp, RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp)),
+                    .shadow(24.dp, RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp)),
                 shape = RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp),
-                color = if (isDark) Color(0xFF141519) else MaterialTheme.colorScheme.surface,
-                border = BorderStroke(1.dp, if (isDark) Color(0xFF202227) else MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
+                color = if (isDark) AmoledBlack else CrystalWhite,
+                border = BorderStroke(0.6.dp, if (isDark) Color(0xFF1E1E24) else Color(0xFFE4E4E7))
             ) {
                 Column(
                     modifier = Modifier
@@ -164,7 +213,7 @@ fun UniversalSearchOverlay(
                                     }
                                 )
                             }
-                            .padding(top = 10.dp, bottom = 4.dp),
+                            .padding(top = 10.dp, bottom = 6.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Box(
@@ -172,7 +221,7 @@ fun UniversalSearchOverlay(
                                 .width(36.dp)
                                 .height(4.dp)
                                 .clip(CircleShape)
-                                .background(if (isDark) Color(0xFF4A4D56) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f))
+                                .background(if (isDark) Color(0xFF333333) else Color(0xFFE0E0E0))
                         )
                     }
 
@@ -183,8 +232,8 @@ fun UniversalSearchOverlay(
                             .padding(horizontal = 16.dp, vertical = 8.dp)
                             .height(52.dp),
                         shape = RoundedCornerShape(26.dp),
-                        color = if (isDark) Color(0xFF1B1D23) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                        border = BorderStroke(1.dp, if (isDark) Color(0xFF2A2D36) else MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
+                        color = if (isDark) Color(0xFF0C0C0E) else Color(0xFFF4F4F6),
+                        border = BorderStroke(0.6.dp, if (isDark) Color(0xFF1E1E24) else Color(0xFFE4E4E7))
                     ) {
                         Row(
                             modifier = Modifier
@@ -195,7 +244,7 @@ fun UniversalSearchOverlay(
                             Icon(
                                 imageVector = Icons.Outlined.Search,
                                 contentDescription = "Search",
-                                tint = if (isDark) Color(0xFF8E929E) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                                tint = if (isDark) ElectricGreen else AmoledBlack,
                                 modifier = Modifier.size(20.dp)
                             )
 
@@ -208,19 +257,19 @@ fun UniversalSearchOverlay(
                                     .weight(1f)
                                     .focusRequester(focusRequester),
                                 textStyle = MaterialTheme.typography.bodyLarge.copy(
-                                    color = if (isDark) Color.White else MaterialTheme.colorScheme.onSurface
+                                    color = if (isDark) CrystalWhite else AmoledBlack
                                 ),
                                 singleLine = true,
-                                cursorBrush = SolidColor(if (isDark) Color.White else MaterialTheme.colorScheme.primary),
+                                cursorBrush = SolidColor(if (isDark) ElectricGreen else AmoledBlack),
                                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                                 keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
                                 decorationBox = { innerTextField ->
                                     Box {
                                         if (query.isEmpty()) {
                                             Text(
-                                                text = "Search notes, bindings, text...",
+                                                text = "Search notes, timeline tasks, text...",
                                                 style = MaterialTheme.typography.bodyMedium,
-                                                color = if (isDark) Color(0xFF6B7080) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                                                color = if (isDark) Color(0xFF666666) else Color(0xFF999999),
                                                 fontSize = 15.sp
                                             )
                                         }
@@ -237,7 +286,7 @@ fun UniversalSearchOverlay(
                                     Icon(
                                         imageVector = Icons.Outlined.Close,
                                         contentDescription = "Clear",
-                                        tint = if (isDark) Color(0xFF8E929E) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        tint = if (isDark) Color(0xFF888888) else Color(0xFF666666),
                                         modifier = Modifier.size(16.dp)
                                     )
                                 }
@@ -250,39 +299,15 @@ fun UniversalSearchOverlay(
                                 Icon(
                                     imageVector = Icons.Outlined.KeyboardArrowDown,
                                     contentDescription = "Close",
-                                    tint = if (isDark) Color(0xFF8E929E) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    tint = if (isDark) Color(0xFF888888) else Color(0xFF666666),
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
                         }
                     }
 
-                    // Section Header
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 6.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = if (query.isBlank()) "RECENT NOTES" else "MATCHING NOTES (${filteredNotes.size})",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            letterSpacing = 1.2.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-
-                        Text(
-                            text = "Swipe up to close",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                            fontSize = 10.sp
-                        )
-                    }
-
                     // Results List
-                    if (filteredNotes.isEmpty()) {
+                    if (filteredNotes.isEmpty() && matchingTrackers.isEmpty()) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -290,24 +315,120 @@ fun UniversalSearchOverlay(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "No matching notes found",
+                                text = if (query.isBlank()) "No notes yet" else "No matching notes or timeline tasks",
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                color = if (isDark) Color(0xFF666666) else Color(0xFF888888)
                             )
                         }
                     } else {
                         LazyColumn(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .heightIn(max = 380.dp)
+                                .heightIn(max = 420.dp)
                                 .padding(horizontal = 14.dp)
                         ) {
+                            // Timeline matches section
+                            if (matchingTrackers.isNotEmpty()) {
+                                item {
+                                    Text(
+                                        text = "TIMELINE TASKS (${matchingTrackers.size})",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = ElectricCyan,
+                                        letterSpacing = 1.2.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp)
+                                    )
+                                }
+
+                                items(matchingTrackers, key = { "tracker_${it.first.id}" }) { pair ->
+                                    val tracker = pair.first
+                                    val matchSnippet = pair.second
+                                    val accent = com.example.naughty.ui.timeline.TimelineColors.accentColor(tracker.accent)
+                                    val pColor = com.example.naughty.ui.timeline.TimelineColors.priorityColor(tracker.priority)
+
+                                    Surface(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 4.dp)
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .clickable {
+                                                onTrackerClick(tracker.id)
+                                                onDismiss()
+                                            },
+                                        shape = RoundedCornerShape(16.dp),
+                                        color = if (isDark) Color(0xFF0C0C0E) else Color(0xFFF9F9FB)
+                                    ) {
+                                        Row(modifier = Modifier.fillMaxWidth()) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .width(4.dp)
+                                                    .height(60.dp)
+                                                    .background(accent)
+                                            )
+                                            Column(modifier = Modifier.padding(12.dp).weight(1f)) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text(
+                                                        text = tracker.title.ifBlank { "Untitled Tracker" },
+                                                        style = MaterialTheme.typography.titleMedium,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        color = if (isDark) CrystalWhite else AmoledBlack,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis,
+                                                        modifier = Modifier.weight(1f)
+                                                    )
+                                                    Surface(
+                                                        shape = RoundedCornerShape(6.dp),
+                                                        color = pColor.copy(alpha = 0.16f),
+                                                        modifier = Modifier.padding(start = 6.dp)
+                                                    ) {
+                                                        Text(
+                                                            text = tracker.priority.name,
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            color = pColor,
+                                                            fontWeight = FontWeight.Bold,
+                                                            fontSize = 9.sp,
+                                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                        )
+                                                    }
+                                                }
+                                                Spacer(modifier = Modifier.height(2.dp))
+                                                Text(
+                                                    text = matchSnippet,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                    fontSize = 11.sp
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Notes section
+                            if (filteredNotes.isNotEmpty()) {
+                                item {
+                                    Text(
+                                        text = if (query.isBlank()) "RECENT NOTES" else "NOTES (${filteredNotes.size})",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (isDark) ElectricGreen else AmoledBlack,
+                                        letterSpacing = 1.2.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp)
+                                    )
+                                }
                             items(filteredNotes, key = { it.id }) { note ->
                                 val palette = getNoteColorPalette(note.colorTheme, isDark)
                                 val boundApp = boundApps[note.id]
                                 val content = rawContents[note.id] ?: ""
                                 val snippet = content
                                     .replace(Regex("!\\[.*?\\]\\(.*?\\)"), "")
+                                    .replace(Regex("\\[🎤\\s*Voice Note\\]\\(.*?\\)", RegexOption.IGNORE_CASE), "")
                                     .replace(Regex("[#*_~`>\\[\\]()]"), "")
                                     .trim()
                                     .take(90)
@@ -318,12 +439,33 @@ fun UniversalSearchOverlay(
                                         .padding(vertical = 4.dp)
                                         .clip(RoundedCornerShape(16.dp))
                                         .clickable {
-                                            onNoteClick(note.id)
-                                            onDismiss()
+                                            if (note.isLocked) {
+                                                if (activity != null) {
+                                                    BiometricAuthHelper.authenticate(
+                                                        activity = activity,
+                                                        title = "Unlock Note",
+                                                        subtitle = "Authenticate to view and edit this note",
+                                                        onSuccess = {
+                                                            NoteLockSession.unlock(note.id)
+                                                            onNoteClick(note.id)
+                                                            onDismiss()
+                                                        },
+                                                        onError = { err ->
+                                                            Toast.makeText(context, err, Toast.LENGTH_SHORT).show()
+                                                        }
+                                                    )
+                                                } else {
+                                                    onNoteClick(note.id)
+                                                    onDismiss()
+                                                }
+                                            } else {
+                                                onNoteClick(note.id)
+                                                onDismiss()
+                                            }
                                         },
                                     shape = RoundedCornerShape(16.dp),
-                                    color = if (isDark) Color(0xFF181A20) else palette.surface,
-                                    border = BorderStroke(1.dp, if (isDark) Color(0xFF22242B) else palette.border)
+                                    color = if (isDark) Color(0xFF0C0C0E) else palette.surface,
+                                    border = BorderStroke(0.6.dp, if (isDark) Color(0xFF1E1E24) else Color(0xFFE4E4E7))
                                 ) {
                                     Column(modifier = Modifier.padding(14.dp)) {
                                         Row(
@@ -331,20 +473,35 @@ fun UniversalSearchOverlay(
                                             horizontalArrangement = Arrangement.SpaceBetween,
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Text(
-                                                text = note.title.ifBlank { "Untitled" },
-                                                style = MaterialTheme.typography.titleMedium,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = if (isDark) Color.White else palette.textPrimary,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
                                                 modifier = Modifier.weight(1f)
-                                            )
+                                            ) {
+                                                if (note.isLocked) {
+                                                    Icon(
+                                                        imageVector = Icons.Outlined.Lock,
+                                                        contentDescription = "Locked",
+                                                        tint = ElectricAmber,
+                                                        modifier = Modifier
+                                                            .size(16.dp)
+                                                            .padding(end = 4.dp)
+                                                    )
+                                                }
+                                                Text(
+                                                    text = note.title.ifBlank { "Untitled" },
+                                                    style = MaterialTheme.typography.titleMedium,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = if (isDark) CrystalWhite else palette.textPrimary,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
 
                                             if (!boundApp.isNullOrBlank()) {
                                                 Surface(
                                                     shape = RoundedCornerShape(8.dp),
-                                                    color = if (isDark) Color(0xFF22242A) else palette.border.copy(alpha = 0.5f),
+                                                    color = ElectricCyan.copy(alpha = 0.12f),
+                                                    border = BorderStroke(0.5.dp, ElectricCyan.copy(alpha = 0.25f)),
                                                     modifier = Modifier.padding(start = 8.dp)
                                                 ) {
                                                     Row(
@@ -354,28 +511,36 @@ fun UniversalSearchOverlay(
                                                         Icon(
                                                             imageVector = Icons.Outlined.Link,
                                                             contentDescription = null,
-                                                            tint = if (isDark) Color(0xFF8E929E) else palette.textSecondary,
+                                                            tint = ElectricCyan,
                                                             modifier = Modifier.size(11.dp)
                                                         )
                                                         Spacer(modifier = Modifier.width(3.dp))
                                                         Text(
                                                             text = boundApp,
                                                             style = MaterialTheme.typography.labelSmall,
-                                                            color = if (isDark) Color(0xFFCCCCCC) else palette.textSecondary,
+                                                            color = ElectricCyan,
                                                             fontSize = 10.sp,
-                                                            fontWeight = FontWeight.Medium
+                                                            fontWeight = FontWeight.SemiBold
                                                         )
                                                     }
                                                 }
                                             }
                                         }
 
-                                        if (snippet.isNotBlank()) {
+                                        if (note.isLocked) {
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                text = "Locked note • Tap to unlock",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = ElectricAmber.copy(alpha = 0.85f),
+                                                fontSize = 12.sp
+                                            )
+                                        } else if (snippet.isNotBlank()) {
                                             Spacer(modifier = Modifier.height(4.dp))
                                             Text(
                                                 text = snippet,
                                                 style = MaterialTheme.typography.bodySmall,
-                                                color = if (isDark) Color(0xFF8E929E) else palette.textSecondary,
+                                                color = if (isDark) Color(0xFF999999) else palette.textSecondary,
                                                 maxLines = 2,
                                                 overflow = TextOverflow.Ellipsis,
                                                 lineHeight = 16.sp
@@ -383,6 +548,7 @@ fun UniversalSearchOverlay(
                                         }
                                     }
                                 }
+                            }
                             }
                         }
                     }

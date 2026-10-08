@@ -18,6 +18,7 @@ ksp = "2.3.12"
 markwon = "4.6.2"
 datastore = "1.1.7"
 mlkitTextRecognition = "16.0.1"
+biometric = "1.2.0-alpha05"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
@@ -59,6 +60,9 @@ androidx-datastore-preferences = { module = "androidx.datastore:datastore-prefer
 
 # Google ML Kit Text Recognition (Bundled on-device)
 mlkit-text-recognition = { module = "com.google.mlkit:text-recognition", version.ref = "mlkitTextRecognition" }
+
+# Biometric
+androidx-biometric = { module = "androidx.biometric:biometric", version.ref = "biometric" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "androidGradlePlugin" }

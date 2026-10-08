@@ -2,14 +2,10 @@ package com.example.naughty
 
 import android.content.Intent
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -19,31 +15,66 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.unit.dp
+import androidx.fragment.app.FragmentActivity
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
-import com.example.naughty.ui.components.UniversalSearchOverlay
+import android.widget.Toast
+import androidx.lifecycle.lifecycleScope
 import com.example.naughty.ui.binding.BindingSheet
 import com.example.naughty.ui.components.PermissionGate
+import com.example.naughty.ui.components.UniversalSearchOverlay
 import com.example.naughty.ui.editor.NoteEditorScreen
 import com.example.naughty.ui.navigation.NoteEditorKey
 import com.example.naughty.ui.navigation.NoteListKey
+import com.example.naughty.ui.navigation.TimelineDetailKey
+import com.example.naughty.ui.navigation.TimelineListKey
 import com.example.naughty.ui.notelist.NoteListScreen
 import com.example.naughty.ui.theme.NaughtyTheme
+import com.example.naughty.ui.components.ShareImageOptionSheet
+import com.example.naughty.ui.timeline.TimelineDetailScreen
+import com.example.naughty.ui.timeline.TimelineListScreen
+import com.example.naughty.util.ImageShareMode
+import com.example.naughty.util.PendingImageShare
+import com.example.naughty.util.ShareIntentHandler
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
 
     private var pendingNoteId by mutableStateOf<String?>(null)
+    private var pendingTrackerId by mutableStateOf<String?>(null)
+    private var pendingOpenTimeline by mutableStateOf(false)
+    private var isBypassed by mutableStateOf(false)
+    private var pendingImageShare by mutableStateOf<PendingImageShare?>(null)
+    private var isProcessingImageShare by mutableStateOf(false)
+    private var processingText by mutableStateOf("")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        pendingNoteId = intent?.getStringExtra("noteId")
+        if (savedInstanceState == null) {
+            handleIncomingIntent(intent)
+        } else {
+            intent?.getStringExtra("noteId")?.let {
+                pendingNoteId = it
+                isBypassed = true
+            }
+            intent?.getStringExtra("trackerId")?.let {
+                pendingTrackerId = it
+                isBypassed = true
+            }
+            if (intent?.getStringExtra("action") == "timeline_tasks") {
+                pendingOpenTimeline = true
+                isBypassed = true
+            }
+            if (intent?.getStringExtra("action") == "create_note") {
+                isBypassed = true
+            }
+        }
 
         setContent {
             NaughtyTheme {
@@ -51,11 +82,62 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    PermissionGate {
+                    PermissionGate(
+                        bypass = isBypassed || pendingNoteId != null || pendingTrackerId != null || pendingImageShare != null || pendingOpenTimeline
+                    ) {
                         NaughtyNavigation(
                             initialNoteId = pendingNoteId,
-                            onNoteOpened = { pendingNoteId = null }
+                            initialTrackerId = pendingTrackerId,
+                            initialOpenTimeline = pendingOpenTimeline,
+                            onNoteOpened = { pendingNoteId = null },
+                            onTrackerOpened = { pendingTrackerId = null },
+                            onTimelineOpened = { pendingOpenTimeline = false }
                         )
+
+                        pendingImageShare?.let { imageShare ->
+                            val app = applicationContext as? NaughtyApp ?: return@let
+                            val repository = app.container.noteRepository
+
+                            ShareImageOptionSheet(
+                                imageUris = imageShare.uris,
+                                isProcessing = isProcessingImageShare,
+                                processingText = processingText,
+                                onSelectMode = { mode ->
+                                    isProcessingImageShare = true
+                                    processingText = when (mode) {
+                                        ImageShareMode.IMAGE_ONLY -> "Attaching image..."
+                                        ImageShareMode.OCR_ONLY -> "Extracting text with OCR..."
+                                        ImageShareMode.BOTH -> "Scanning text & attaching image..."
+                                    }
+                                    lifecycleScope.launch {
+                                        val createdNote = ShareIntentHandler.processImageShare(
+                                            context = this@MainActivity,
+                                            share = imageShare,
+                                            mode = mode,
+                                            repository = repository
+                                        )
+                                        withContext(Dispatchers.Main) {
+                                            isProcessingImageShare = false
+                                            pendingImageShare = null
+                                            if (createdNote != null) {
+                                                val msg = when (mode) {
+                                                    ImageShareMode.OCR_ONLY -> "Text extracted via OCR"
+                                                    ImageShareMode.BOTH -> "Image & OCR text note created"
+                                                    ImageShareMode.IMAGE_ONLY -> "Note created"
+                                                }
+                                                Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show()
+                                                pendingNoteId = createdNote.id
+                                            }
+                                        }
+                                    }
+                                },
+                                onDismiss = {
+                                    if (!isProcessingImageShare) {
+                                        pendingImageShare = null
+                                    }
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -65,8 +147,70 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        handleIncomingIntent(intent)
+    }
+
+    private fun handleIncomingIntent(intent: Intent?) {
+        if (intent == null) return
+
         intent.getStringExtra("noteId")?.let { noteId ->
+            isBypassed = true
             pendingNoteId = noteId
+            return
+        }
+        intent.getStringExtra("trackerId")?.let { trackerId ->
+            isBypassed = true
+            pendingTrackerId = trackerId
+            return
+        }
+
+        val actionExtra = intent.getStringExtra("action")
+        if (actionExtra == "create_note") {
+            isBypassed = true
+            val app = applicationContext as? NaughtyApp ?: return
+            val repository = app.container.noteRepository
+            lifecycleScope.launch {
+                val createdNote = repository.createNote(
+                    title = "",
+                    content = "",
+                    cardType = "modular"
+                )
+                withContext(Dispatchers.Main) {
+                    pendingNoteId = createdNote.id
+                }
+            }
+            return
+        } else if (actionExtra == "timeline_tasks") {
+            isBypassed = true
+            pendingOpenTimeline = true
+            return
+        }
+
+        if (ShareIntentHandler.isShareIntent(intent) && !ShareIntentHandler.isHandled(intent)) {
+            isBypassed = true
+            val app = applicationContext as? NaughtyApp ?: return
+            val repository = app.container.noteRepository
+
+            val imageShare = ShareIntentHandler.extractImageShare(intent)
+            if (imageShare != null) {
+                ShareIntentHandler.markAsHandled(intent)
+                pendingImageShare = imageShare
+                return
+            }
+
+            lifecycleScope.launch {
+                val createdNote = ShareIntentHandler.processShareIntent(
+                    context = this@MainActivity,
+                    intent = intent,
+                    repository = repository
+                )
+                if (createdNote != null) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@MainActivity, "Note created", Toast.LENGTH_SHORT).show()
+                        pendingNoteId = createdNote.id
+                    }
+                }
+            }
         }
     }
 }
@@ -74,7 +218,11 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun NaughtyNavigation(
     initialNoteId: String? = null,
-    onNoteOpened: () -> Unit = {}
+    initialTrackerId: String? = null,
+    initialOpenTimeline: Boolean = false,
+    onNoteOpened: () -> Unit = {},
+    onTrackerOpened: () -> Unit = {},
+    onTimelineOpened: () -> Unit = {}
 ) {
     val app = androidx.compose.ui.platform.LocalContext.current.applicationContext as NaughtyApp
     val container = app.container
@@ -83,6 +231,8 @@ fun NaughtyNavigation(
     // Observe active notes and active bindings for search and swiping
     val activeNotes by container.noteRepository.getAllActive().collectAsState(initial = emptyList())
     val activeBindings by container.bindingRepository.getAllActive().collectAsState(initial = emptyList())
+    val allTrackers by container.timelineRepository.observeTrackers().collectAsState(initial = emptyList())
+    val allMilestones by container.timelineRepository.observeAllMilestones().collectAsState(initial = emptyList())
     var noteContents by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
 
     // Keep a stable browsing order for swiping in editor so auto-saving current note doesn't reshuffle the list
@@ -118,13 +268,33 @@ fun NaughtyNavigation(
     // Universal pull-down search overlay state
     var showUniversalSearch by remember { mutableStateOf(false) }
 
-    // Handle opening note from notification
+    // Handle opening note from notification or shortcut
     LaunchedEffect(initialNoteId) {
         if (!initialNoteId.isNullOrBlank()) {
             if (backStack.lastOrNull() != NoteEditorKey(initialNoteId)) {
                 backStack.add(NoteEditorKey(initialNoteId))
             }
             onNoteOpened()
+        }
+    }
+
+    // Handle opening timeline tracker from notification
+    LaunchedEffect(initialTrackerId) {
+        if (!initialTrackerId.isNullOrBlank()) {
+            if (backStack.lastOrNull() != TimelineDetailKey(initialTrackerId)) {
+                backStack.add(TimelineDetailKey(initialTrackerId))
+            }
+            onTrackerOpened()
+        }
+    }
+
+    // Handle opening timeline list from shortcut
+    LaunchedEffect(initialOpenTimeline) {
+        if (initialOpenTimeline) {
+            if (backStack.lastOrNull() != TimelineListKey) {
+                backStack.add(TimelineListKey)
+            }
+            onTimelineOpened()
         }
     }
 
@@ -147,6 +317,9 @@ fun NaughtyNavigation(
                         viewModel = viewModel,
                         onNoteClick = { noteId ->
                             backStack.add(NoteEditorKey(noteId))
+                        },
+                        onOpenTimeline = {
+                            backStack.add(TimelineListKey)
                         },
                         onTriggerSearch = {
                             showUniversalSearch = true
@@ -198,6 +371,33 @@ fun NaughtyNavigation(
                         }
                     )
                 }
+
+                entry<TimelineListKey> {
+                    val viewModel = remember { container.timelineListViewModel() }
+                    TimelineListScreen(
+                        viewModel = viewModel,
+                        onBack = {
+                            if (backStack.size > 1) {
+                                backStack.removeLastOrNull()
+                            }
+                        },
+                        onTrackerClick = { trackerId ->
+                            backStack.add(TimelineDetailKey(trackerId))
+                        }
+                    )
+                }
+
+                entry<TimelineDetailKey> { key ->
+                    val viewModel = remember(key.trackerId) { container.timelineDetailViewModel(key.trackerId) }
+                    TimelineDetailScreen(
+                        viewModel = viewModel,
+                        onBack = {
+                            if (backStack.size > 1) {
+                                backStack.removeLastOrNull()
+                            }
+                        }
+                    )
+                }
             }
         )
 
@@ -217,6 +417,8 @@ fun NaughtyNavigation(
             notes = activeNotes,
             rawContents = noteContents,
             boundApps = boundAppsMap,
+            trackers = allTrackers,
+            milestones = allMilestones,
             onNoteClick = { targetNoteId ->
                 val currentKey = backStack.lastOrNull()
                 if (currentKey is NoteEditorKey) {
@@ -229,6 +431,10 @@ fun NaughtyNavigation(
                 } else {
                     backStack.add(NoteEditorKey(targetNoteId))
                 }
+                showUniversalSearch = false
+            },
+            onTrackerClick = { targetTrackerId ->
+                backStack.add(TimelineDetailKey(targetTrackerId))
                 showUniversalSearch = false
             },
             onDismiss = { showUniversalSearch = false }

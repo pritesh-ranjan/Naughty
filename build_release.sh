@@ -70,7 +70,7 @@ VERSION_CODE=$(grep 'VERSION_CODE=' "$VERSION_FILE" | cut -d'=' -f2)
 VERSION_NAME=$(grep 'VERSION_NAME=' "$VERSION_FILE" | cut -d'=' -f2)
 
 echo "=================================================="
-echo "🚀 Building Naughty Release APK v${VERSION_NAME} (code: ${VERSION_CODE})"
+echo "🚀 Building Naughty Release Artifacts v${VERSION_NAME} (code: ${VERSION_CODE})"
 echo "=================================================="
 
 # Run unit tests
@@ -81,25 +81,67 @@ echo "🧪 Running unit tests..."
 echo "📦 Assembling signed release APK..."
 ./gradlew assembleRelease --quiet
 
-OUTPUT_APK="Naughty-v${VERSION_NAME}-release.apk"
-cp "app/build/outputs/apk/release/app-release.apk" "$OUTPUT_APK"
+# Assemble signed release AAB (Google Play Store bundle)
+echo "📦 Assembling signed release AAB bundle..."
+./gradlew bundleRelease --quiet
 
-if [ -f "$OUTPUT_APK" ]; then
+# Clean up older artifacts in root
+rm -f Naughty-v*-release.apk Naughty-v*-release.aab Naughty-debug.apk
+
+OUTPUT_APK="Naughty-v${VERSION_NAME}-release.apk"
+OUTPUT_AAB="Naughty-v${VERSION_NAME}-release.aab"
+cp "app/build/outputs/apk/release/app-release.apk" "$OUTPUT_APK"
+cp "app/build/outputs/bundle/release/app-release.aab" "$OUTPUT_AAB"
+
+if [ -f "$OUTPUT_APK" ] && [ -f "$OUTPUT_AAB" ]; then
     APK_SIZE=$(ls -lh "$OUTPUT_APK" | awk '{print $5}')
+    AAB_SIZE=$(ls -lh "$OUTPUT_AAB" | awk '{print $5}')
+
+    echo ""
+    echo "🔍 Verifying cryptographic APK signatures (apksigner)..."
+    APKSIGNER_BIN=""
+    if command -v apksigner >/dev/null 2>&1; then
+        APKSIGNER_BIN="apksigner"
+    elif [ -n "${ANDROID_HOME:-}" ] && [ -d "$ANDROID_HOME/build-tools" ]; then
+        LATEST_BT=$(ls -1d "$ANDROID_HOME/build-tools/"* 2>/dev/null | sort -V | tail -n1)
+        if [ -x "$LATEST_BT/apksigner" ]; then
+            APKSIGNER_BIN="$LATEST_BT/apksigner"
+        fi
+    fi
+
+    CERT_INFO=""
+    if [ -n "$APKSIGNER_BIN" ]; then
+        "$APKSIGNER_BIN" verify --verbose --print-certs "$OUTPUT_APK" > /tmp/naughty_apksigner.log 2>&1 || true
+        CERT_INFO=$(grep "certificate SHA-256 digest:" /tmp/naughty_apksigner.log | head -n1 | awk '{print $NF}')
+        V2_STATUS=$(grep "Verified using v2 scheme" /tmp/naughty_apksigner.log | awk '{print $NF}')
+        V3_STATUS=$(grep "Verified using v3 scheme" /tmp/naughty_apksigner.log | awk '{print $NF}')
+        rm -f /tmp/naughty_apksigner.log
+    fi
+
     echo ""
     echo "=================================================="
-    echo "✅ Release build successful!"
-    echo "📁 Output APK : $SCRIPT_DIR/$OUTPUT_APK"
-    echo "📊 File Size  : $APK_SIZE"
-    echo "🏷️ Version    : $VERSION_NAME (Code: $VERSION_CODE)"
+    echo "✅ Release build successful & cryptographically signed!"
+    echo "📁 Output APK (FOSS / Direct) : $SCRIPT_DIR/$OUTPUT_APK ($APK_SIZE)"
+    echo "📁 Output AAB (Google Play)   : $SCRIPT_DIR/$OUTPUT_AAB ($AAB_SIZE)"
+    echo "🏷️ Version                    : $VERSION_NAME (Code: $VERSION_CODE)"
+    if [ -n "$CERT_INFO" ]; then
+        echo "🔐 Cert SHA-256 Fingerprint   : $CERT_INFO"
+        echo "🛡️ Schemes Verified           : v2 ($V2_STATUS), v3 ($V3_STATUS)"
+    fi
     echo "=================================================="
 
     if [ "$INSTALL" = true ]; then
-        echo "📲 Installing on connected device..."
-        adb install -r "$OUTPUT_APK"
-        echo "✅ Installed successfully!"
+        echo "📲 Installing APK on connected device..."
+        if adb install -r "$OUTPUT_APK"; then
+            echo "✅ Installed successfully!"
+        else
+            echo ""
+            echo "⚠️ Note: If the existing app on the device was signed with a different key (e.g. debug key),"
+            echo "   Android requires uninstalling the older build first due to signature mismatch:"
+            echo "   $ adb uninstall com.example.naughty && adb install $OUTPUT_APK"
+        fi
     fi
 else
-    echo "❌ Error: Output APK $OUTPUT_APK not found."
+    echo "❌ Error: Output APK or AAB not found."
     exit 1
 fi

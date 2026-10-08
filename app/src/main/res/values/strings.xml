@@ -1,3 +1,10 @@
 <resources>
     <string name="app_name">Naughty</string>
+    <string name="add_to_naughty">Add to Naughty</string>
+    <string name="shortcut_new_note">New Note</string>
+    <string name="shortcut_new_note_long">Create a new note</string>
+    <string name="shortcut_timeline">Timeline Tasks</string>
+    <string name="shortcut_timeline_long">Track progress &amp; milestones</string>
+    <string name="share_new_note">New note</string>
+    <string name="share_copy_text_clipboard">Copy text in image to clipboard</string>
 </resources>

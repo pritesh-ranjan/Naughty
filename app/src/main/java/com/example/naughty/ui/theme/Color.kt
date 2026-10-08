@@ -2,68 +2,79 @@ package com.example.naughty.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Stealth Dark Aesthetic Palette (Reference design)
-val StealthDarkBackground = Color(0xFF0E0F12)
-val StealthCardSurface = Color(0xFF16171B)
-val StealthCardBorder = Color(0xFF202227)
-val StealthAppBadgePill = Color(0xFF22242A)
-val StealthAppBadgeText = Color(0xFFC5C8D1)
-val StealthDockBackground = Color(0xFF141519)
-val StealthDockBorder = Color(0xFF22242B)
-val StealthTextPrimary = Color(0xFFFFFFFF)
-val StealthTextSecondary = Color(0xFF8E929E)
-val StealthTextMuted = Color(0xFF656873)
-val StealthIndicatorActive = Color(0xFFE2E4EB)
-val StealthIndicatorInactive = Color(0xFF35373F)
-val StealthFabWhite = Color(0xFFFFFFFF)
-val StealthFabBlack = Color(0xFF000000)
+// Amoled Black & Crystal White Base Tokens
+val AmoledBlack = Color(0xFF000000)
+val CrystalWhite = Color(0xFFFFFFFF)
+
+// Popping Modern Bright Accent Palette (Inspired by antinote.io)
+val ElectricGreen = Color(0xFF00F59B) // Antinote signature popping green
+val ElectricCyan = Color(0xFF00E5FF)  // Vivid electric sky/cyan
+val ElectricPink = Color(0xFFFF3366)  // Vibrant popping coral pink
+val ElectricAmber = Color(0xFFFF9500) // Popping neon amber/orange
+val ElectricPurple = Color(0xFFA855F7)// Vivid electric violet
+
+// Dark Modern Aesthetic Palette
+val StealthDarkBackground = AmoledBlack
+val StealthCardSurface = Color(0xFF0A0A0C)
+val StealthCardBorder = Color(0xFF191A20)
+val StealthAppBadgePill = Color(0xFF14151B)
+val StealthAppBadgeText = Color(0xFFFFFFFF)
+val StealthDockBackground = AmoledBlack
+val StealthDockBorder = Color(0xFF1A1A22)
+val StealthTextPrimary = CrystalWhite
+val StealthTextSecondary = Color(0xFFA1A1AA)
+val StealthTextMuted = Color(0xFF71717A)
+val StealthIndicatorActive = ElectricGreen
+val StealthIndicatorInactive = Color(0xFF27272A)
+val StealthFabWhite = ElectricGreen
+val StealthFabBlack = AmoledBlack
 
 // Main backgrounds
-val WarmLinenLight = Color(0xFFF7F5EE)
-val WarmCharcoalDark = StealthDarkBackground
+val WarmLinenLight = CrystalWhite
+val WarmCharcoalDark = AmoledBlack
 
 // Pure surfaces for floating bars, sheets, dialogs
-val PureWhiteSurface = Color(0xFFFFFFFF)
+val PureWhiteSurface = CrystalWhite
 val DarkElevatedSurface = StealthCardSurface
 
 // Typography colors
-val WarmTextPrimaryLight = Color(0xFF1E1D1B)
-val WarmTextSecondaryLight = Color(0xFF7E7A73)
-val WarmTextMutedLight = Color(0xFFA5A097)
+val WarmTextPrimaryLight = Color(0xFF09090B)
+val WarmTextSecondaryLight = Color(0xFF52525B)
+val WarmTextMutedLight = Color(0xFF71717A)
 
 val WarmTextPrimaryDark = StealthTextPrimary
 val WarmTextSecondaryDark = StealthTextSecondary
 val WarmTextMutedDark = StealthTextMuted
 
 // Subtitle tracking color
-val SubtitleColorLight = Color(0xFF949088)
+val SubtitleColorLight = Color(0xFF71717A)
 val SubtitleColorDark = StealthTextMuted
 
 // Title highlighter brush
-val TitleHighlighterPink = Color(0xFFFCD5CF)
+val TitleHighlighterPink = Color(0xFFFFE4E6)
 
 // Standard theme colors
-val LightBackground = WarmLinenLight
-val LightSurface = PureWhiteSurface
-val LightSurfaceVariant = Color(0xFFF0ECE3)
+val LightBackground = CrystalWhite
+val LightSurface = CrystalWhite
+val LightSurfaceVariant = Color(0xFFF4F4F5)
 val LightTextPrimary = WarmTextPrimaryLight
 val LightTextSecondary = WarmTextSecondaryLight
-val LightAccent = Color(0xFF262523)
-val LightAccentContainer = Color(0xFFEBE7DD)
-val LightOutline = Color(0xFFE4DFD6)
-val LightError = Color(0xFFD32F2F)
-val LightArchiveAmber = Color(0xFFFFA000)
+val LightAccent = AmoledBlack
+val LightAccentContainer = Color(0xFFE6FAF0)
+val LightOutline = Color(0xFFE4E4E7)
+val LightError = ElectricPink
+val LightArchiveAmber = ElectricAmber
 
-val DarkBackground = StealthDarkBackground
+val DarkBackground = AmoledBlack
 val DarkSurface = StealthCardSurface
-val DarkSurfaceVariant = Color(0xFF1A1B20)
+val DarkSurfaceVariant = Color(0xFF121216)
 val DarkTextPrimary = StealthTextPrimary
 val DarkTextSecondary = StealthTextSecondary
-val DarkAccent = Color(0xFFEAE7E0)
-val DarkAccentContainer = Color(0xFF222329)
+val DarkAccent = CrystalWhite
+val DarkAccentContainer = Color(0xFF10281E)
 val DarkOutline = StealthCardBorder
-val DarkError = Color(0xFFEF5350)
-val DarkArchiveAmber = Color(0xFFFFB300)
+val DarkError = ElectricPink
+val DarkArchiveAmber = ElectricAmber
 
 // Data class for note card color palette (bridged with NoteThemeRegistry)
 data class NoteColorPalette(
@@ -77,19 +88,19 @@ data class NoteColorPalette(
 fun getNoteColorPalette(theme: String?, isDark: Boolean): NoteColorPalette {
     val noteTheme = NoteThemeRegistry.getTheme(theme, isDark)
     return if (isDark) {
-        // Sleek uniform stealth dark cards for home page list & search
+        // Sleek uniform amoled dark cards with hairline border and popping accents
         NoteColorPalette(
             surface = StealthCardSurface,
-            border = if (noteTheme.isDark) noteTheme.border.copy(alpha = 0.7f) else StealthCardBorder,
+            border = if (noteTheme.isDark) noteTheme.border.copy(alpha = 0.5f) else StealthCardBorder,
             textPrimary = StealthTextPrimary,
             textSecondary = StealthTextSecondary,
             iconTint = noteTheme.accent
         )
     } else {
-        // Clean surfaces for light theme
+        // Clean crisp crystal white surfaces for light theme
         NoteColorPalette(
             surface = noteTheme.surface,
-            border = noteTheme.border,
+            border = noteTheme.border.copy(alpha = 0.45f),
             textPrimary = noteTheme.textPrimary,
             textSecondary = noteTheme.textSecondary,
             iconTint = noteTheme.accent

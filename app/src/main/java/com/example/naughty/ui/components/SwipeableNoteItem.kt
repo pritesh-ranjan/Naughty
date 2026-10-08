@@ -9,10 +9,13 @@ import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.anchoredDraggable
 import androidx.compose.foundation.gestures.animateTo
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Archive
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -24,13 +27,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import com.example.naughty.ui.theme.DarkArchiveAmber
-import com.example.naughty.ui.theme.DarkError
-import com.example.naughty.ui.theme.LightArchiveAmber
-import com.example.naughty.ui.theme.LightError
+import com.example.naughty.ui.theme.ElectricAmber
+import com.example.naughty.ui.theme.ElectricPink
+import com.example.naughty.ui.theme.isAppInDarkTheme
 import kotlin.math.roundToInt
 
 enum class SwipeAction { NONE, ARCHIVE, DELETE }
@@ -82,15 +83,15 @@ fun SwipeableNoteItem(
         }
     }
 
-    val isLight = MaterialTheme.colorScheme.background == com.example.naughty.ui.theme.LightBackground
+    val isDark = isAppInDarkTheme()
 
     Box(modifier = modifier.fillMaxWidth()) {
         // Background actions
         val offset = try { state.requireOffset() } catch (_: Exception) { 0f }
         val revealColor by animateColorAsState(
             targetValue = when {
-                offset > 20f -> if (isLight) LightError.copy(alpha = 0.12f) else DarkError.copy(alpha = 0.15f)
-                offset < -20f -> if (isLight) LightArchiveAmber.copy(alpha = 0.12f) else DarkArchiveAmber.copy(alpha = 0.15f)
+                offset > 20f -> ElectricPink.copy(alpha = 0.16f)
+                offset < -20f -> ElectricAmber.copy(alpha = 0.16f)
                 else -> MaterialTheme.colorScheme.surface
             },
             animationSpec = tween(200),
@@ -100,29 +101,31 @@ fun SwipeableNoteItem(
         Box(
             modifier = Modifier
                 .matchParentSize()
-                .clip(RoundedCornerShape(22.dp))
+                .clip(RoundedCornerShape(20.dp))
                 .background(revealColor)
         ) {
             // Delete icon (swipe right)
             if (offset > 20f) {
                 Icon(
-                    painter = painterResource(android.R.drawable.ic_menu_delete),
+                    imageVector = Icons.Outlined.Delete,
                     contentDescription = "Delete",
-                    tint = if (isLight) LightError else DarkError,
+                    tint = ElectricPink,
                     modifier = Modifier
                         .align(Alignment.CenterStart)
                         .padding(start = 24.dp)
+                        .size(22.dp)
                 )
             }
             // Archive icon (swipe left)
             if (offset < -20f) {
                 Icon(
-                    painter = painterResource(android.R.drawable.ic_menu_save),
+                    imageVector = Icons.Outlined.Archive,
                     contentDescription = "Archive",
-                    tint = if (isLight) LightArchiveAmber else DarkArchiveAmber,
+                    tint = ElectricAmber,
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
                         .padding(end = 24.dp)
+                        .size(22.dp)
                 )
             }
         }

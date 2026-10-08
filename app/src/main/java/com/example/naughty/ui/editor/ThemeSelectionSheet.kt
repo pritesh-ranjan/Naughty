@@ -43,6 +43,10 @@ import com.example.naughty.ui.components.paperBackground
 import com.example.naughty.ui.theme.NoteTheme
 import com.example.naughty.ui.theme.NoteThemeRegistry
 
+import com.example.naughty.ui.theme.AmoledBlack
+import com.example.naughty.ui.theme.CrystalWhite
+import com.example.naughty.ui.theme.isAppInDarkTheme
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ThemeSelectionSheet(
@@ -51,12 +55,13 @@ fun ThemeSelectionSheet(
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val isDark = isAppInDarkTheme()
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surface,
-        contentColor = MaterialTheme.colorScheme.onSurface,
+        containerColor = if (isDark) AmoledBlack else CrystalWhite,
+        contentColor = if (isDark) CrystalWhite else AmoledBlack,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     ) {
         Column(
@@ -77,12 +82,12 @@ fun ThemeSelectionSheet(
                         text = "Note Themes",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = if (isDark) CrystalWhite else AmoledBlack
                     )
                     Text(
                         text = "14 themes • Grid paper • Typography",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = if (isDark) Color(0xFF888888) else Color(0xFF666666)
                     )
                 }
 
@@ -90,7 +95,7 @@ fun ThemeSelectionSheet(
                     Icon(
                         imageVector = Icons.Outlined.Close,
                         contentDescription = "Close",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = if (isDark) Color(0xFF888888) else Color(0xFF666666)
                     )
                 }
             }
@@ -139,7 +144,7 @@ private fun ThemePreviewCard(
         shape = RoundedCornerShape(16.dp),
         color = theme.surface,
         border = BorderStroke(
-            if (isSelected) 2.dp else 1.dp,
+            if (isSelected) 2.dp else 0.6.dp,
             if (isSelected) theme.accent else theme.border
         )
     ) {

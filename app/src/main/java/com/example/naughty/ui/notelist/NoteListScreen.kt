@@ -37,10 +37,40 @@ import androidx.compose.material.icons.outlined.CheckBox
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.LockOpen
+import androidx.compose.material.icons.outlined.Archive
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.TextButton
+import androidx.compose.foundation.layout.navigationBarsPadding
+import com.example.naughty.util.BiometricAuthHelper
+import com.example.naughty.util.BiometricStatus
+import com.example.naughty.util.NoteLockSession
+import com.example.naughty.util.findFragmentActivity
+import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.outlined.PhotoCamera
+import androidx.compose.material.icons.outlined.Timeline
 import androidx.compose.ui.graphics.Color
+import com.example.naughty.ui.theme.AmoledBlack
+import com.example.naughty.ui.theme.CrystalWhite
+import com.example.naughty.ui.theme.ElectricAmber
+import com.example.naughty.ui.theme.ElectricCyan
+import com.example.naughty.ui.theme.ElectricGreen
+import com.example.naughty.ui.theme.ElectricPink
 import com.example.naughty.ui.theme.StealthDockBackground
 import com.example.naughty.ui.theme.StealthDockBorder
 import com.example.naughty.ui.theme.StealthFabBlack
@@ -109,10 +139,12 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NoteListScreen(
     viewModel: NoteListViewModel,
     onNoteClick: (String) -> Unit,
+    onOpenTimeline: () -> Unit = {},
     onTriggerSearch: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -122,9 +154,11 @@ fun NoteListScreen(
     val archivedCount by viewModel.archivedCount.collectAsStateWithLifecycle()
     val deletedCount by viewModel.deletedCount.collectAsStateWithLifecycle()
     val activeCount by viewModel.activeCount.collectAsStateWithLifecycle()
+    val trackerCount by viewModel.trackerCount.collectAsStateWithLifecycle()
 
     val listState = rememberLazyListState()
     val context = LocalContext.current
+    val activity = remember(context) { context.findFragmentActivity() }
     val coroutineScope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -132,37 +166,11 @@ fun NoteListScreen(
     val isDark = isAppInDarkTheme()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     var fullscreenImageUri by remember { mutableStateOf<String?>(null) }
+    var actionNote by remember { mutableStateOf<com.example.naughty.data.local.NoteMetadata?>(null) }
+    var showNoSecurityDialog by remember { mutableStateOf(false) }
 
     val currentTheme by context.themePreferenceFlow().collectAsState(initial = ThemeMode.LIGHT)
 
-    val nestedScrollConnection = remember {
-        object : NestedScrollConnection {
-            var pullDistance = 0f
-            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                if (available.y > 0 && listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0) {
-                    pullDistance += available.y
-                    if (pullDistance > 45f) {
-                        pullDistance = 0f
-                        onTriggerSearch()
-                    }
-                } else if (available.y < -10f) {
-                    pullDistance = 0f
-                }
-                return Offset.Zero
-            }
-
-            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                if (available.y > 0 && listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0) {
-                    pullDistance += available.y
-                    if (pullDistance > 45f) {
-                        pullDistance = 0f
-                        onTriggerSearch()
-                    }
-                }
-                return Offset.Zero
-            }
-        }
-    }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -200,6 +208,7 @@ fun NoteListScreen(
                 deletedCount = deletedCount,
                 archivedNotes = archivedNotes,
                 deletedNotes = deletedNotes,
+                timelineCount = trackerCount,
                 onThemeSelected = { newTheme ->
                     coroutineScope.launch {
                         context.themeDataStore.edit { preferences ->
@@ -207,6 +216,7 @@ fun NoteListScreen(
                         }
                     }
                 },
+                onOpenTimeline = onOpenTimeline,
                 onNoteClick = { noteId ->
                     onNoteClick(noteId)
                 },
@@ -238,31 +248,7 @@ fun NoteListScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                        .pointerInput(Unit) {
-                            var totalDragY = 0f
-                            detectVerticalDragGestures(
-                                onDragStart = { totalDragY = 0f },
-                                onDragEnd = {
-                                    if (totalDragY > 35f) {
-                                        totalDragY = 0f
-                                        onTriggerSearch()
-                                    }
-                                },
-                                onVerticalDrag = { change, dragAmount ->
-                                    if (dragAmount > 0) {
-                                        totalDragY += dragAmount
-                                        if (totalDragY > 40f) {
-                                            change.consume()
-                                            totalDragY = 0f
-                                            onTriggerSearch()
-                                        }
-                                    } else if (dragAmount < -5f) {
-                                        totalDragY = 0f
-                                    }
-                                }
-                            )
-                        },
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -278,14 +264,99 @@ fun NoteListScreen(
                         )
                     }
 
-                    Text(
-                        text = "NAUGHTY",
-                        style = BrandTitleStyle,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
+                    // Centered Brand Title - Swipe down or tap to open universal search
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .pointerInput(Unit) {
+                                var totalDragY = 0f
+                                detectVerticalDragGestures(
+                                    onDragStart = { totalDragY = 0f },
+                                    onDragEnd = {
+                                        if (totalDragY > 50f) {
+                                            totalDragY = 0f
+                                            onTriggerSearch()
+                                        }
+                                    },
+                                    onDragCancel = { totalDragY = 0f },
+                                    onVerticalDrag = { change, dragAmount ->
+                                        if (dragAmount > 0) {
+                                            totalDragY += dragAmount
+                                            if (totalDragY > 60f) {
+                                                change.consume()
+                                                totalDragY = 0f
+                                                onTriggerSearch()
+                                            }
+                                        } else if (dragAmount < -10f) {
+                                            totalDragY = 0f
+                                        }
+                                    }
+                                )
+                            }
+                            .clickable { onTriggerSearch() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "NAUGHTY",
+                            style = BrandTitleStyle,
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                    }
 
                     // Spacer on right to balance the menu button and keep center title balanced
                     Spacer(modifier = Modifier.size(40.dp))
+                }
+
+                // Timeline Tasks Horizontal Banner Ribbon
+                AnimatedVisibility(
+                    visible = trackerCount > 0,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onOpenTimeline() },
+                            color = if (isDark) Color(0xFF091419) else Color(0xFFEAF5FA)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Timeline,
+                                        contentDescription = null,
+                                        tint = if (isDark) ElectricCyan else Color(0xFF0083A0),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        text = "$trackerCount ${if (trackerCount == 1) "timeline task" else "timeline tasks"}",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (isDark) CrystalWhite else Color(0xFF0F172A),
+                                        fontSize = 13.sp,
+                                        letterSpacing = 0.3.sp
+                                    )
+                                }
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                    contentDescription = "View timeline tasks",
+                                    tint = if (isDark) ElectricCyan.copy(alpha = 0.75f) else Color(0xFF0083A0),
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
+                    }
                 }
 
             // Notes List
@@ -293,23 +364,7 @@ fun NoteListScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(bottom = 120.dp)
-                        .pointerInput(Unit) {
-                            var totalDragY = 0f
-                            detectVerticalDragGestures(
-                                onDragStart = { totalDragY = 0f },
-                                onDragEnd = {
-                                    if (totalDragY > 35f) onTriggerSearch()
-                                },
-                                onVerticalDrag = { change, dragAmount ->
-                                    totalDragY += dragAmount
-                                    if (totalDragY > 40f) {
-                                        change.consume()
-                                        onTriggerSearch()
-                                    }
-                                }
-                            )
-                        },
+                        .padding(bottom = 120.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -322,12 +377,13 @@ fun NoteListScreen(
                         Spacer(modifier = Modifier.height(8.dp))
                         if (uiState.searchQuery.isNotBlank()) {
                             val query = uiState.searchQuery.trim()
+                            val ctaColor = if (isDark) ElectricGreen else AmoledBlack
                             Surface(
-                                shape = RoundedCornerShape(16.dp),
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
+                                shape = RoundedCornerShape(999.dp),
+                                color = if (isDark) ElectricGreen.copy(alpha = 0.15f) else AmoledBlack.copy(alpha = 0.08f),
+                                border = BorderStroke(0.6.dp, if (isDark) ElectricGreen.copy(alpha = 0.4f) else AmoledBlack.copy(alpha = 0.25f)),
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(16.dp))
+                                    .clip(RoundedCornerShape(999.dp))
                                     .clickable {
                                         viewModel.onSearchQueryChange("")
                                         viewModel.createNote(
@@ -339,19 +395,19 @@ fun NoteListScreen(
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Outlined.Add,
                                         contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
+                                        tint = ctaColor,
                                         modifier = Modifier.size(16.dp)
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
                                         text = "Create note \"$query\"",
                                         style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.primary,
+                                        color = ctaColor,
                                         fontWeight = FontWeight.SemiBold
                                     )
                                 }
@@ -368,9 +424,7 @@ fun NoteListScreen(
             } else {
                 LazyColumn(
                     state = listState,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .nestedScroll(nestedScrollConnection),
+                    modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(13.dp)
                 ) {
                     items(
@@ -382,7 +436,31 @@ fun NoteListScreen(
                                 note = note,
                                 rawContent = uiState.rawContents[note.id] ?: "",
                                 boundApps = uiState.boundApps[note.id] ?: emptyList(),
-                                onClick = { onNoteClick(note.id) },
+                                onClick = {
+                                    if (note.isLocked) {
+                                        if (activity != null) {
+                                            BiometricAuthHelper.authenticate(
+                                                activity = activity,
+                                                title = "Unlock Note",
+                                                subtitle = "Authenticate to view and edit this note",
+                                                onSuccess = {
+                                                    NoteLockSession.unlock(note.id)
+                                                    onNoteClick(note.id)
+                                                },
+                                                onError = { err ->
+                                                    Toast.makeText(context, err, Toast.LENGTH_SHORT).show()
+                                                }
+                                            )
+                                        } else {
+                                            onNoteClick(note.id)
+                                        }
+                                    } else {
+                                        onNoteClick(note.id)
+                                    }
+                                },
+                                onLongClick = {
+                                    actionNote = note
+                                },
                                 onContentChange = { updatedContent ->
                                     viewModel.updateNoteContent(note.id, updatedContent)
                                 },
@@ -419,11 +497,11 @@ fun NoteListScreen(
                 for (i in 0 until 4) {
                     val isSelected = uiState.selectedPageIndex == i
                     val dotColor = if (isSelected) {
-                        if (isDark) StealthIndicatorActive else MaterialTheme.colorScheme.onBackground
+                        if (isDark) ElectricGreen else AmoledBlack
                     } else {
-                        if (isDark) StealthIndicatorInactive else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.25f)
+                        if (isDark) Color(0xFF27272A) else Color(0xFFE4E4E7)
                     }
-                    val targetWidth = if (isSelected) 20.dp else 5.dp
+                    val targetWidth = if (isSelected) 22.dp else 4.dp
                     val animatedWidth by animateDpAsState(
                         targetValue = targetWidth,
                         animationSpec = tween(durationMillis = 200),
@@ -432,9 +510,9 @@ fun NoteListScreen(
 
                     Box(
                         modifier = Modifier
-                            .height(5.dp)
+                            .height(4.dp)
                             .width(animatedWidth)
-                            .clip(RoundedCornerShape(2.5.dp))
+                            .clip(RoundedCornerShape(2.dp))
                             .background(dotColor)
                             .clickable { viewModel.onSelectPage(i) }
                     )
@@ -446,13 +524,13 @@ fun NoteListScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
-                    .height(58.dp)
-                    .shadow(elevation = 8.dp, shape = RoundedCornerShape(32.dp)),
-                shape = RoundedCornerShape(32.dp),
-                color = if (isDark) StealthDockBackground else MaterialTheme.colorScheme.surface,
+                    .height(56.dp)
+                    .shadow(elevation = 10.dp, shape = RoundedCornerShape(28.dp)),
+                shape = RoundedCornerShape(28.dp),
+                color = if (isDark) AmoledBlack else CrystalWhite,
                 border = BorderStroke(
-                    width = 1.dp,
-                    color = if (isDark) StealthDockBorder else MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
+                    width = 0.6.dp,
+                    color = if (isDark) Color(0xFF1E1E24) else Color(0xFFE4E4E7)
                 )
             ) {
                 Row(
@@ -464,7 +542,7 @@ fun NoteListScreen(
                     Icon(
                         imageVector = Icons.Outlined.Search,
                         contentDescription = "Search or Jot",
-                        tint = if (isDark) Color(0xFF757985) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        tint = if (isDark) ElectricGreen else AmoledBlack,
                         modifier = Modifier
                             .size(20.dp)
                             .clickable { onTriggerSearch() }
@@ -479,10 +557,10 @@ fun NoteListScreen(
                             .weight(1f)
                             .focusRequester(searchFocusRequester),
                         textStyle = MaterialTheme.typography.bodyLarge.copy(
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = if (isDark) CrystalWhite else AmoledBlack
                         ),
                         singleLine = true,
-                        cursorBrush = SolidColor(MaterialTheme.colorScheme.onSurface),
+                        cursorBrush = SolidColor(if (isDark) ElectricGreen else AmoledBlack),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                         keyboardActions = KeyboardActions(
                             onDone = {
@@ -506,7 +584,7 @@ fun NoteListScreen(
                                     Text(
                                         text = "Jot anything...",
                                         style = MaterialTheme.typography.bodyMedium,
-                                        color = if (isDark) Color(0xFF525560) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                        color = if (isDark) Color(0xFF71717A) else Color(0xFFA1A1AA),
                                         fontSize = 15.sp
                                     )
                                 }
@@ -526,14 +604,14 @@ fun NoteListScreen(
                             Icon(
                                 imageVector = Icons.Outlined.Close,
                                 contentDescription = "Clear search",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                tint = if (isDark) Color(0xFFA1A1AA) else Color(0xFF71717A),
                                 modifier = Modifier.size(16.dp)
                             )
                         }
                         Spacer(modifier = Modifier.width(4.dp))
                     }
 
-                    // Right Media Action Icons: Photo camera, Checklist, White FAB plus button
+                    // Right Media Action Icons: Photo camera, Checklist, Popping FAB plus button
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -545,7 +623,7 @@ fun NoteListScreen(
                             Icon(
                                 imageVector = Icons.Outlined.PhotoCamera,
                                 contentDescription = "Attach image",
-                                tint = if (isDark) Color(0xFF8E929E) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                                tint = if (isDark) CrystalWhite.copy(alpha = 0.85f) else AmoledBlack.copy(alpha = 0.75f),
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -567,7 +645,7 @@ fun NoteListScreen(
                             Icon(
                                 imageVector = Icons.Outlined.CheckBox,
                                 contentDescription = "New checklist",
-                                tint = if (isDark) Color(0xFF8E929E) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                                tint = if (isDark) CrystalWhite.copy(alpha = 0.85f) else AmoledBlack.copy(alpha = 0.75f),
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -577,7 +655,7 @@ fun NoteListScreen(
                         Surface(
                             modifier = Modifier.size(36.dp),
                             shape = CircleShape,
-                            color = if (isDark) StealthFabWhite else MaterialTheme.colorScheme.primary,
+                            color = if (isDark) ElectricGreen else AmoledBlack,
                             shadowElevation = 2.dp
                         ) {
                             Box(
@@ -605,7 +683,7 @@ fun NoteListScreen(
                                 Icon(
                                     imageVector = Icons.Outlined.Add,
                                     contentDescription = "Add note",
-                                    tint = if (isDark) StealthFabBlack else MaterialTheme.colorScheme.onPrimary,
+                                    tint = if (isDark) AmoledBlack else CrystalWhite,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -620,6 +698,210 @@ fun NoteListScreen(
         FullscreenImageViewer(
             imageUri = fullscreenImageUri!!,
             onDismiss = { fullscreenImageUri = null }
+        )
+    }
+
+    if (actionNote != null) {
+        val targetNote = actionNote!!
+        ModalBottomSheet(
+            onDismissRequest = { actionNote = null },
+            sheetState = rememberModalBottomSheetState(),
+            containerColor = if (isDark) AmoledBlack else CrystalWhite
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 8.dp)
+                    .navigationBarsPadding()
+            ) {
+                Text(
+                    text = targetNote.title.ifBlank { "Untitled" },
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isDark) CrystalWhite else AmoledBlack,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Lock / Unlock Action
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable {
+                            val toLock = !targetNote.isLocked
+                            actionNote = null
+                            if (toLock) {
+                                val status = BiometricAuthHelper.canAuthenticate(context)
+                                when (status) {
+                                    BiometricStatus.AVAILABLE -> {
+                                        if (activity != null) {
+                                            BiometricAuthHelper.authenticate(
+                                                activity = activity,
+                                                title = "Lock Note",
+                                                subtitle = "Authenticate to secure this note with system lock",
+                                                onSuccess = {
+                                                    viewModel.toggleLock(targetNote.id, true)
+                                                    Toast.makeText(context, "Note locked", Toast.LENGTH_SHORT).show()
+                                                },
+                                                onError = { err ->
+                                                    Toast.makeText(context, err, Toast.LENGTH_SHORT).show()
+                                                }
+                                            )
+                                        } else {
+                                            viewModel.toggleLock(targetNote.id, true)
+                                        }
+                                    }
+                                    BiometricStatus.NOT_ENROLLED -> {
+                                        showNoSecurityDialog = true
+                                    }
+                                    else -> {
+                                        Toast.makeText(context, "Screen lock or biometric is unavailable on this device.", Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                            } else {
+                                if (activity != null) {
+                                    BiometricAuthHelper.authenticate(
+                                        activity = activity,
+                                        title = "Unlock Note",
+                                        subtitle = "Authenticate to remove lock from this note",
+                                        onSuccess = {
+                                            viewModel.toggleLock(targetNote.id, false)
+                                            Toast.makeText(context, "Note unlocked", Toast.LENGTH_SHORT).show()
+                                        },
+                                        onError = { err ->
+                                            Toast.makeText(context, err, Toast.LENGTH_SHORT).show()
+                                        }
+                                    )
+                                } else {
+                                    viewModel.toggleLock(targetNote.id, false)
+                                }
+                            }
+                        }
+                        .padding(vertical = 12.dp, horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = if (targetNote.isLocked) Icons.Outlined.LockOpen else Icons.Outlined.Lock,
+                        contentDescription = null,
+                        tint = ElectricAmber,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(14.dp))
+                    Text(
+                        text = if (targetNote.isLocked) "Unlock note (remove lock)" else "Lock note",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = if (isDark) CrystalWhite else AmoledBlack
+                    )
+                }
+
+                // Pin / Unpin
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable {
+                            viewModel.togglePin(targetNote.id)
+                            actionNote = null
+                        }
+                        .padding(vertical = 12.dp, horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.PushPin,
+                        contentDescription = null,
+                        tint = if (targetNote.isPinned) ElectricGreen else (if (isDark) CrystalWhite.copy(alpha = 0.75f) else MaterialTheme.colorScheme.onSurfaceVariant),
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(14.dp))
+                    Text(
+                        text = if (targetNote.isPinned) "Unpin note" else "Pin note",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = if (isDark) CrystalWhite else AmoledBlack
+                    )
+                }
+
+                // Archive
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable {
+                            viewModel.archiveNote(targetNote.id)
+                            actionNote = null
+                        }
+                        .padding(vertical = 12.dp, horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Archive,
+                        contentDescription = null,
+                        tint = if (isDark) CrystalWhite.copy(alpha = 0.75f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(14.dp))
+                    Text(
+                        text = "Archive note",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = if (isDark) CrystalWhite else AmoledBlack
+                    )
+                }
+
+                // Delete
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable {
+                            viewModel.deleteNote(targetNote.id)
+                            actionNote = null
+                        }
+                        .padding(vertical = 12.dp, horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Delete,
+                        contentDescription = null,
+                        tint = ElectricPink,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(14.dp))
+                    Text(
+                        text = "Delete note",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = ElectricPink
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+        }
+    }
+
+    if (showNoSecurityDialog) {
+        AlertDialog(
+            onDismissRequest = { showNoSecurityDialog = false },
+            title = { Text("Screen Lock Required") },
+            text = {
+                Text("To lock notes with system security, please set up a PIN, pattern, password, or biometric in your device Settings.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showNoSecurityDialog = false
+                        BiometricAuthHelper.openSecuritySettings(context)
+                    }
+                ) {
+                    Text("Open Settings")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNoSecurityDialog = false }) {
+                    Text("Cancel")
+                }
+            }
         )
     }
 }

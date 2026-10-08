@@ -23,7 +23,8 @@ data class NoteListUiState(
 
 class NoteListViewModel(
     private val noteRepository: NoteRepository,
-    private val bindingRepository: BindingRepository
+    private val bindingRepository: BindingRepository,
+    private val timelineRepository: com.example.naughty.data.repository.TimelineRepository? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(NoteListUiState())
@@ -43,6 +44,10 @@ class NoteListViewModel(
 
     val deletedCount: StateFlow<Int> = noteRepository.countDeleted()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val trackerCount: StateFlow<Int> = timelineRepository?.countTrackers()
+        ?.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+        ?: MutableStateFlow(0)
 
     private var allActiveNotes: List<NoteMetadata> = emptyList()
     private var allContents: MutableMap<String, String> = mutableMapOf()
@@ -200,6 +205,12 @@ class NoteListViewModel(
     fun togglePin(id: String) {
         viewModelScope.launch {
             noteRepository.togglePin(id)
+        }
+    }
+
+    fun toggleLock(id: String, isLocked: Boolean) {
+        viewModelScope.launch {
+            noteRepository.toggleLock(id, isLocked)
         }
     }
 

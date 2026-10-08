@@ -27,11 +27,53 @@ android {
         versionName = appVersionName
     }
 
+    signingConfigs {
+        create("release") {
+            val keystorePropsFile = rootProject.file("keystore.properties")
+            val keystoreProps = Properties().apply {
+                if (keystorePropsFile.exists()) {
+                    keystorePropsFile.inputStream().use { load(it) }
+                }
+            }
+            val storeFilePath = keystoreProps.getProperty("storeFile")
+                ?: System.getenv("KEYSTORE_PATH")
+                ?: System.getenv("SIGNING_KEYSTORE_PATH")
+            val storePass = keystoreProps.getProperty("storePassword")
+                ?: System.getenv("KEYSTORE_PASSWORD")
+                ?: System.getenv("SIGNING_KEYSTORE_PASSWORD")
+            val keyAliasVal = keystoreProps.getProperty("keyAlias")
+                ?: System.getenv("KEY_ALIAS")
+                ?: System.getenv("SIGNING_KEY_ALIAS")
+            val keyPass = keystoreProps.getProperty("keyPassword")
+                ?: System.getenv("KEY_PASSWORD")
+                ?: System.getenv("SIGNING_KEY_PASSWORD")
+
+            if (!storeFilePath.isNullOrBlank() && !storePass.isNullOrBlank() && !keyAliasVal.isNullOrBlank() && !keyPass.isNullOrBlank()) {
+                val resolvedKeystore = file(storeFilePath)
+                if (resolvedKeystore.exists()) {
+                    storeFile = resolvedKeystore
+                    storePassword = storePass
+                    keyAlias = keyAliasVal
+                    keyPassword = keyPass
+                    enableV1Signing = true
+                    enableV2Signing = true
+                    enableV3Signing = true
+                } else {
+                    println("⚠️ Warning: Keystore file not found at $storeFilePath. Falling back to debug signing.")
+                    initWith(getByName("debug"))
+                }
+            } else {
+                initWith(getByName("debug"))
+            }
+        }
+    }
+
     buildTypes {
         release {
+            isDebuggable = project.findProperty("debuggableRelease") == "true"
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {
@@ -113,4 +155,10 @@ dependencies {
 
   // Google ML Kit Text Recognition (Local on-device)
   implementation(libs.mlkit.text.recognition)
+
+  // Biometric & Device Credential Authentication
+  implementation(libs.androidx.biometric)
+
+  // Audx RNNoise Audio Noise Suppression
+  implementation("com.github.rizukirr:audx-android:v3.0.0")
 }

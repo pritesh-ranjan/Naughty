@@ -38,7 +38,8 @@ data class EditorUiState(
     val canUndo: Boolean = false,
     val canRedo: Boolean = false,
     val reminderTime: Long? = null,
-    val hasActiveReminders: Boolean = false
+    val hasActiveReminders: Boolean = false,
+    val isLocked: Boolean = false
 )
 
 class NoteEditorViewModel(
@@ -88,6 +89,7 @@ class NoteEditorViewModel(
                     cardType = note.metadata.cardType.ifBlank { "modular" },
                     isPinned = note.metadata.isPinned,
                     isArchived = note.metadata.isArchived,
+                    isLocked = note.metadata.isLocked,
                     isLoading = false,
                     canUndo = false,
                     canRedo = false,
@@ -374,7 +376,8 @@ class NoteEditorViewModel(
 
     private fun updateBlocksInternal(newBlocks: List<EditorBlock>) {
         val attachedImages = EditorBlockParser.extractImages(_uiState.value.content)
-        val newContent = EditorBlockParser.toMarkdown(newBlocks, attachedImages)
+        val attachedVoiceNotes = EditorBlockParser.extractVoiceNotes(_uiState.value.content)
+        val newContent = EditorBlockParser.toMarkdown(newBlocks, attachedImages, attachedVoiceNotes)
         val current = _uiState.value.content
         if (newContent != current) {
             undoHistory.add(current)
@@ -741,6 +744,7 @@ class NoteEditorViewModel(
         }
 
         val attachedImages = EditorBlockParser.extractImages(_uiState.value.content)
+        val attachedVoiceNotes = EditorBlockParser.extractVoiceNotes(_uiState.value.content)
         val currentBlocks = _uiState.value.blocks.toMutableList()
 
         if (currentBlocks.isEmpty() || (currentBlocks.size == 1 && (currentBlocks[0] as? EditorBlock.Text)?.text.isNullOrBlank())) {
@@ -773,7 +777,7 @@ class NoteEditorViewModel(
             }
         }
 
-        val newContent = EditorBlockParser.toMarkdown(currentBlocks, attachedImages)
+        val newContent = EditorBlockParser.toMarkdown(currentBlocks, attachedImages, attachedVoiceNotes)
         updateContent(newContent)
     }
 
@@ -787,6 +791,24 @@ class NoteEditorViewModel(
     fun removeImage(imageUri: String) {
         val currentContent = _uiState.value.content
         val regex = Regex("!\\[.*?\\]\\(" + Regex.escape(imageUri) + "\\)\n?")
+        val updated = currentContent.replace(regex, "").trim()
+        updateContent(updated)
+    }
+
+    fun addVoiceNote(audioUri: String, transcript: String? = null) {
+        if (audioUri.isBlank()) return
+        val currentContent = _uiState.value.content
+        val audioStr = "\n\n[🎤 Voice Note]($audioUri)\n"
+        val updated = currentContent.trimEnd() + audioStr
+        updateContent(updated)
+        if (!transcript.isNullOrBlank()) {
+            insertExtractedText(transcript)
+        }
+    }
+
+    fun removeVoiceNote(audioUri: String) {
+        val currentContent = _uiState.value.content
+        val regex = Regex("""!?\[(?:🎤\s*)?Voice Note.*?\]\(""" + Regex.escape(audioUri) + """\)\n?""")
         val updated = currentContent.replace(regex, "").trim()
         updateContent(updated)
     }
@@ -824,6 +846,13 @@ class NoteEditorViewModel(
         _uiState.value = _uiState.value.copy(isPinned = newPinned)
         viewModelScope.launch {
             noteRepository.togglePin(_uiState.value.noteId)
+        }
+    }
+
+    fun setNoteLocked(locked: Boolean) {
+        _uiState.value = _uiState.value.copy(isLocked = locked)
+        viewModelScope.launch {
+            noteRepository.toggleLock(_uiState.value.noteId, locked)
         }
     }
 

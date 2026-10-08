@@ -42,6 +42,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -80,6 +81,18 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material.icons.outlined.DocumentScanner
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.LockOpen
+import androidx.compose.material.icons.outlined.Fingerprint
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.TextButton
+import androidx.compose.foundation.layout.PaddingValues
+import com.example.naughty.util.BiometricAuthHelper
+import com.example.naughty.util.BiometricStatus
+import com.example.naughty.util.NoteLockSession
+import com.example.naughty.util.findFragmentActivity
 import android.widget.Toast
 import com.example.naughty.util.ImageTextExtractor
 import kotlinx.coroutines.Dispatchers
@@ -114,6 +127,13 @@ import com.example.naughty.ui.theme.SubtitleColorLight
 import com.example.naughty.ui.theme.getNoteColorPalette
 import com.example.naughty.ui.theme.NoteThemeRegistry
 import com.example.naughty.ui.components.paperBackground
+import com.example.naughty.ui.theme.AmoledBlack
+import com.example.naughty.ui.theme.CrystalWhite
+import com.example.naughty.ui.theme.ElectricAmber
+import com.example.naughty.ui.theme.ElectricCyan
+import com.example.naughty.ui.theme.ElectricGreen
+import com.example.naughty.ui.theme.ElectricPink
+import com.example.naughty.ui.theme.isAppInDarkTheme
 import com.example.naughty.ui.components.FullscreenImageViewer
 import com.example.naughty.ui.editor.ThemeSelectionSheet
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -122,6 +142,10 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.RecordVoiceOver
+import com.example.naughty.ui.components.VoiceNotePlayer
+import com.example.naughty.ui.components.VoiceRecordingSheet
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -168,6 +192,32 @@ fun NoteEditorScreen(
     val scrollState = rememberScrollState()
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
+    val activity = remember(context) { context.findFragmentActivity() }
+    var isUnlockedInSession by remember(noteId) { mutableStateOf(NoteLockSession.isUnlocked(noteId)) }
+    var showNoSecurityDialog by remember { mutableStateOf(false) }
+
+    DisposableEffect(noteId) {
+        onDispose {
+            NoteLockSession.lock(noteId)
+        }
+    }
+
+    LaunchedEffect(uiState.isLocked, isUnlockedInSession, noteId) {
+        if (uiState.isLocked && !isUnlockedInSession && activity != null) {
+            BiometricAuthHelper.authenticate(
+                activity = activity,
+                title = "Unlock Note",
+                subtitle = "Authenticate to view and edit this note",
+                onSuccess = {
+                    NoteLockSession.unlock(noteId)
+                    isUnlockedInSession = true
+                },
+                onError = { err ->
+                    Toast.makeText(context, err, Toast.LENGTH_SHORT).show()
+                }
+            )
+        }
+    }
 
     var showMenu by remember { mutableStateOf(false) }
     var showThemeSheet by remember { mutableStateOf(false) }
@@ -180,6 +230,8 @@ fun NoteEditorScreen(
     var reminderInitialTime by remember { mutableStateOf<Long?>(null) }
     var isEditingNoteReminder by remember { mutableStateOf(false) }
     var fullscreenImageUri by remember { mutableStateOf<String?>(null) }
+    var showVoiceSheet by remember { mutableStateOf(false) }
+    var voiceSheetTab by remember { mutableIntStateOf(0) }
 
     var focusedBlockId by remember { mutableStateOf<String?>(null) }
     var lastFocusedBlockId by remember { mutableStateOf<String?>(null) }
@@ -198,34 +250,6 @@ fun NoteEditorScreen(
         }
     }
 
-    val nestedScrollConnection = remember {
-        object : NestedScrollConnection {
-            var pullDistance = 0f
-            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                if (available.y > 0 && scrollState.value == 0) {
-                    pullDistance += available.y
-                    if (pullDistance > 45f) {
-                        pullDistance = 0f
-                        onTriggerSearch()
-                    }
-                } else if (available.y < -10f) {
-                    pullDistance = 0f
-                }
-                return Offset.Zero
-            }
-
-            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                if (available.y > 0 && scrollState.value == 0) {
-                    pullDistance += available.y
-                    if (pullDistance > 45f) {
-                        pullDistance = 0f
-                        onTriggerSearch()
-                    }
-                }
-                return Offset.Zero
-            }
-        }
-    }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -294,7 +318,6 @@ fun NoteEditorScreen(
                         style = SpanStyle(
                             color = currentTheme.accent,
                             fontWeight = FontWeight.Bold,
-                            textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline,
                             background = currentTheme.accent.copy(alpha = 0.14f)
                         ),
                         start = match.range.first,
@@ -370,31 +393,7 @@ fun NoteEditorScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 6.dp)
-                    .pointerInput(Unit) {
-                        var totalDragY = 0f
-                        detectVerticalDragGestures(
-                            onDragStart = { totalDragY = 0f },
-                            onDragEnd = {
-                                if (totalDragY > 35f) {
-                                    totalDragY = 0f
-                                    onTriggerSearch()
-                                }
-                            },
-                            onVerticalDrag = { change, dragAmount ->
-                                if (dragAmount > 0) {
-                                    totalDragY += dragAmount
-                                    if (totalDragY > 40f) {
-                                        change.consume()
-                                        totalDragY = 0f
-                                        onTriggerSearch()
-                                    }
-                                } else if (dragAmount < -5f) {
-                                    totalDragY = 0f
-                                }
-                            }
-                        )
-                    },
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(
@@ -413,9 +412,37 @@ fun NoteEditorScreen(
 
                 Spacer(modifier = Modifier.width(4.dp))
 
-                // Centered Brand Title
+                // Centered Brand Title - Swipe down or tap to open universal search
                 Box(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .pointerInput(Unit) {
+                            var totalDragY = 0f
+                            detectVerticalDragGestures(
+                                onDragStart = { totalDragY = 0f },
+                                onDragEnd = {
+                                    if (totalDragY > 50f) {
+                                        totalDragY = 0f
+                                        onTriggerSearch()
+                                    }
+                                },
+                                onDragCancel = { totalDragY = 0f },
+                                onVerticalDrag = { change, dragAmount ->
+                                    if (dragAmount > 0) {
+                                        totalDragY += dragAmount
+                                        if (totalDragY > 60f) {
+                                            change.consume()
+                                            totalDragY = 0f
+                                            onTriggerSearch()
+                                        }
+                                    } else if (dragAmount < -10f) {
+                                        totalDragY = 0f
+                                    }
+                                }
+                            )
+                        }
+                        .clickable { onTriggerSearch() },
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -426,174 +453,273 @@ fun NoteEditorScreen(
                 }
 
                 // Right Actions: App Binding (🔗), Share, Palette, More
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(
-                        onClick = onBindingClick,
-                        modifier = Modifier.size(38.dp)
-                    ) {
-                        Text(
-                            text = "🔗",
-                            fontSize = 18.sp
-                        )
-                    }
+                if (!uiState.isLocked || isUnlockedInSession) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (uiState.isLocked) {
+                            IconButton(
+                                onClick = { showMenu = true },
+                                modifier = Modifier.size(38.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Lock,
+                                    contentDescription = "Locked Note",
+                                    tint = ElectricAmber,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
 
-                    var showShareMenu by remember { mutableStateOf(false) }
-
-                    Box {
                         IconButton(
-                            onClick = { showShareMenu = true },
+                            onClick = onBindingClick,
                             modifier = Modifier.size(38.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Outlined.Share,
-                                contentDescription = "Share",
+                                imageVector = Icons.Outlined.Link,
+                                contentDescription = "Bind App",
                                 tint = currentTheme.textPrimary.copy(alpha = 0.85f),
                                 modifier = Modifier.size(20.dp)
                             )
                         }
 
-                        DropdownMenu(
-                            expanded = showShareMenu,
-                            onDismissRequest = { showShareMenu = false },
-                            modifier = Modifier.background(MaterialTheme.colorScheme.surface)
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("Share as text") },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Outlined.Send,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                },
-                                onClick = {
-                                    showShareMenu = false
-                                    viewModel.shareNoteAsText(context)
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Share as Markdown (.md)") },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Outlined.Article,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                },
-                                onClick = {
-                                    showShareMenu = false
-                                    viewModel.shareNoteAsFile(context)
-                                }
-                            )
+                        var showShareMenu by remember { mutableStateOf(false) }
+
+                        Box {
+                            IconButton(
+                                onClick = { showShareMenu = true },
+                                modifier = Modifier.size(38.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Share,
+                                    contentDescription = "Share",
+                                    tint = currentTheme.textPrimary.copy(alpha = 0.85f),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+
+                            DropdownMenu(
+                                expanded = showShareMenu,
+                                onDismissRequest = { showShareMenu = false },
+                                modifier = Modifier.background(if (isDark) AmoledBlack else CrystalWhite)
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Share as text") },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Outlined.Send,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    },
+                                    onClick = {
+                                        showShareMenu = false
+                                        viewModel.shareNoteAsText(context)
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Share as Markdown (.md)") },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Outlined.Article,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    },
+                                    onClick = {
+                                        showShareMenu = false
+                                        viewModel.shareNoteAsFile(context)
+                                    }
+                                )
+                            }
                         }
-                    }
 
-                    IconButton(
-                        onClick = { showThemeSheet = true },
-                        modifier = Modifier.size(38.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Palette,
-                            contentDescription = "Color Theme",
-                            tint = currentTheme.textPrimary.copy(alpha = 0.85f),
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-
-                    Box {
                         IconButton(
-                            onClick = { showMenu = true },
+                            onClick = { showThemeSheet = true },
                             modifier = Modifier.size(38.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Outlined.MoreVert,
-                                contentDescription = "More",
+                                imageVector = Icons.Outlined.Palette,
+                                contentDescription = "Color Theme",
                                 tint = currentTheme.textPrimary.copy(alpha = 0.85f),
                                 modifier = Modifier.size(20.dp)
                             )
                         }
 
-                        DropdownMenu(
-                            expanded = showMenu,
-                            onDismissRequest = { showMenu = false },
-                            modifier = Modifier.background(MaterialTheme.colorScheme.surface)
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text(if (uiState.isPinned) "Unpin note" else "Pin note") },
-                                onClick = {
-                                    viewModel.togglePin()
-                                    showMenu = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Bind to application") },
-                                onClick = {
-                                    showMenu = false
-                                    onBindingClick()
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Share as text") },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Outlined.Send,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                },
-                                onClick = {
-                                    showMenu = false
-                                    viewModel.shareNoteAsText(context)
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Share as Markdown (.md)") },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Outlined.Article,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                },
-                                onClick = {
-                                    showMenu = false
-                                    viewModel.shareNoteAsFile(context)
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(if (uiState.isRawMarkdownMode) "Card View" else "Raw Markdown") },
-                                onClick = {
-                                    viewModel.toggleRawMarkdownMode()
-                                    showMenu = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Archive note") },
-                                onClick = {
-                                    showMenu = false
-                                    viewModel.archiveNote { onBack() }
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Delete note", color = MaterialTheme.colorScheme.error) },
-                                onClick = {
-                                    showMenu = false
-                                    viewModel.deleteNote { onBack() }
-                                }
-                            )
+                        Box {
+                            IconButton(
+                                onClick = { showMenu = true },
+                                modifier = Modifier.size(38.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.MoreVert,
+                                    contentDescription = "More",
+                                    tint = currentTheme.textPrimary.copy(alpha = 0.85f),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+
+                            DropdownMenu(
+                                expanded = showMenu,
+                                onDismissRequest = { showMenu = false },
+                                modifier = Modifier.background(if (isDark) AmoledBlack else CrystalWhite)
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text(if (uiState.isPinned) "Unpin note" else "Pin note") },
+                                    onClick = {
+                                        viewModel.togglePin()
+                                        showMenu = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(if (uiState.isLocked) "Unlock note (remove lock)" else "Lock note") },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = if (uiState.isLocked) Icons.Outlined.LockOpen else Icons.Outlined.Lock,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    },
+                                    onClick = {
+                                        showMenu = false
+                                        if (uiState.isLocked) {
+                                            activity?.let { act ->
+                                                BiometricAuthHelper.authenticate(
+                                                    activity = act,
+                                                    title = "Unlock Note",
+                                                    subtitle = "Authenticate to remove lock from this note",
+                                                    onSuccess = {
+                                                        viewModel.setNoteLocked(false)
+                                                        Toast.makeText(context, "Note unlocked", Toast.LENGTH_SHORT).show()
+                                                    },
+                                                    onError = { errMsg ->
+                                                        Toast.makeText(context, errMsg, Toast.LENGTH_SHORT).show()
+                                                    }
+                                                )
+                                            }
+                                        } else {
+                                            val status = BiometricAuthHelper.canAuthenticate(context)
+                                            when (status) {
+                                                BiometricStatus.AVAILABLE -> {
+                                                    activity?.let { act ->
+                                                        BiometricAuthHelper.authenticate(
+                                                            activity = act,
+                                                            title = "Lock Note",
+                                                            subtitle = "Authenticate to secure this note with system lock",
+                                                            onSuccess = {
+                                                                viewModel.setNoteLocked(true)
+                                                                NoteLockSession.unlock(noteId)
+                                                                isUnlockedInSession = true
+                                                                Toast.makeText(context, "Note locked", Toast.LENGTH_SHORT).show()
+                                                            },
+                                                            onError = { errMsg ->
+                                                                Toast.makeText(context, errMsg, Toast.LENGTH_SHORT).show()
+                                                            }
+                                                        )
+                                                    }
+                                                }
+                                                BiometricStatus.NOT_ENROLLED -> {
+                                                    showNoSecurityDialog = true
+                                                }
+                                                else -> {
+                                                    Toast.makeText(context, "Screen lock or biometric is unavailable on this device.", Toast.LENGTH_LONG).show()
+                                                }
+                                            }
+                                        }
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Bind to application") },
+                                    onClick = {
+                                        showMenu = false
+                                        onBindingClick()
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Share as text") },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Outlined.Send,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    },
+                                    onClick = {
+                                        showMenu = false
+                                        viewModel.shareNoteAsText(context)
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Share as Markdown (.md)") },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Outlined.Article,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    },
+                                    onClick = {
+                                        showMenu = false
+                                        viewModel.shareNoteAsFile(context)
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(if (uiState.isRawMarkdownMode) "Card View" else "Raw Markdown") },
+                                    onClick = {
+                                        viewModel.toggleRawMarkdownMode()
+                                        showMenu = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Archive note") },
+                                    onClick = {
+                                        showMenu = false
+                                        viewModel.archiveNote { onBack() }
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Delete note", color = MaterialTheme.colorScheme.error) },
+                                    onClick = {
+                                        showMenu = false
+                                        viewModel.deleteNote { onBack() }
+                                    }
+                                )
+                            }
                         }
                     }
+                } else {
+                    Spacer(modifier = Modifier.width(40.dp))
                 }
             }
 
-            // Scrollable Content Canvas
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .nestedScroll(nestedScrollConnection)
-                    .verticalScroll(scrollState)
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-            ) {
+            if (uiState.isLocked && !isUnlockedInSession) {
+                LockedNoteBarrier(
+                    title = uiState.title.ifBlank { "Locked note" },
+                    currentTheme = currentTheme,
+                    isDark = isDark,
+                    onUnlockClick = {
+                        activity?.let { act ->
+                            BiometricAuthHelper.authenticate(
+                                activity = act,
+                                title = "Unlock Note",
+                                subtitle = "Authenticate to view and edit this note",
+                                onSuccess = {
+                                    NoteLockSession.unlock(noteId)
+                                    isUnlockedInSession = true
+                                },
+                                onError = { errMsg ->
+                                    Toast.makeText(context, errMsg, Toast.LENGTH_SHORT).show()
+                                }
+                            )
+                        }
+                    }
+                )
+            } else {
+                // Scrollable Content Canvas
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(scrollState)
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
                 if (uiState.isRawMarkdownMode) {
                     // Raw Markdown Edit mode
                     BasicTextField(
@@ -709,7 +835,7 @@ fun NoteEditorScreen(
 
                                 Spacer(modifier = Modifier.width(8.dp))
 
-                                // Bound Apps Section: display all bound apps with 🔗 emoji icon
+                                // Bound Apps Section: display all bound apps with modern link icon
                                 val boundApps = uiState.boundApps
                                 Row(
                                     horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -718,42 +844,47 @@ fun NoteEditorScreen(
                                     if (boundApps.isNotEmpty()) {
                                         boundApps.forEach { appName ->
                                             Surface(
-                                                shape = RoundedCornerShape(14.dp),
-                                                color = currentTheme.border.copy(alpha = 0.4f),
-                                                border = BorderStroke(1.dp, currentTheme.border),
+                                                shape = RoundedCornerShape(12.dp),
+                                                color = ElectricCyan.copy(alpha = 0.12f),
+                                                border = BorderStroke(0.6.dp, ElectricCyan.copy(alpha = 0.35f)),
                                                 modifier = Modifier
-                                                    .clip(RoundedCornerShape(14.dp))
+                                                    .clip(RoundedCornerShape(12.dp))
                                                     .clickable { onBindingClick() }
                                             ) {
                                                 Row(
-                                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                                     verticalAlignment = Alignment.CenterVertically
                                                 ) {
-                                                    Text("🔗", fontSize = 11.5.sp)
+                                                    Icon(
+                                                        imageVector = Icons.Outlined.Link,
+                                                        contentDescription = null,
+                                                        tint = ElectricCyan,
+                                                        modifier = Modifier.size(12.dp)
+                                                    )
                                                     Spacer(modifier = Modifier.width(4.dp))
                                                     Text(
                                                         text = appName,
                                                         fontSize = 11.5.sp,
-                                                        fontWeight = FontWeight.Medium,
-                                                        color = currentTheme.textPrimary
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        color = ElectricCyan
                                                     )
                                                 }
                                             }
                                         }
                                         // Additional + chip to add more bindings
                                         Surface(
-                                            shape = RoundedCornerShape(14.dp),
+                                            shape = RoundedCornerShape(12.dp),
                                             color = Color.Transparent,
-                                            border = BorderStroke(1.dp, currentTheme.textSecondary.copy(alpha = 0.35f)),
+                                            border = BorderStroke(0.6.dp, ElectricCyan.copy(alpha = 0.35f)),
                                             modifier = Modifier
-                                                .clip(RoundedCornerShape(14.dp))
+                                                .clip(RoundedCornerShape(12.dp))
                                                 .clickable { onBindingClick() }
                                         ) {
                                             Row(
-                                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp),
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
-                                                Text("+", fontSize = 12.sp, color = currentTheme.textSecondary, fontWeight = FontWeight.Bold)
+                                                Text("+", fontSize = 12.sp, color = ElectricCyan, fontWeight = FontWeight.Bold)
                                             }
                                         }
                                     }
@@ -770,11 +901,10 @@ fun NoteEditorScreen(
                                             )
                                         }
                                         Surface(
-                                            shape = RoundedCornerShape(14.dp),
+                                            shape = RoundedCornerShape(12.dp),
                                             color = currentTheme.accent.copy(alpha = 0.14f),
-                                            border = BorderStroke(1.dp, currentTheme.accent.copy(alpha = 0.45f)),
                                             modifier = Modifier
-                                                .clip(RoundedCornerShape(14.dp))
+                                                .clip(RoundedCornerShape(12.dp))
                                                 .clickable {
                                                     activeSelectionContext = null
                                                     reminderTargetBlockId = null
@@ -944,15 +1074,35 @@ fun NoteEditorScreen(
                             }
                         }
                     }
+
+                    // Attached Voice Notes Section (WhatsApp-style Opus player)
+                    val attachedVoiceNotes = remember(uiState.content) {
+                        EditorBlockParser.extractVoiceNotes(uiState.content)
+                    }
+
+                    attachedVoiceNotes.forEach { audioUri ->
+                        Spacer(modifier = Modifier.height(12.dp))
+                        VoiceNotePlayer(
+                            audioUriString = audioUri,
+                            accentColor = currentTheme.accent,
+                            onDelete = { viewModel.removeVoiceNote(audioUri) },
+                            onInsertTranscript = { transcript ->
+                                viewModel.insertExtractedText(transcript, focusedBlockId ?: lastFocusedBlockId)
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 }
 
                 // Space for floating editor toolbar
                 Spacer(modifier = Modifier.height(120.dp))
             }
         }
+    }
 
         // Floating Bottom Editor Toolbar
-        Surface(
+        if (!uiState.isLocked || isUnlockedInSession) {
+            Surface(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
@@ -960,10 +1110,10 @@ fun NoteEditorScreen(
                 .imePadding()
                 .padding(bottom = 14.dp, start = 16.dp, end = 16.dp)
                 .height(54.dp)
-                .shadow(elevation = 8.dp, shape = RoundedCornerShape(28.dp)),
-            shape = RoundedCornerShape(28.dp),
-            color = MaterialTheme.colorScheme.surface,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
+                .shadow(elevation = 16.dp, shape = RoundedCornerShape(27.dp)),
+            shape = RoundedCornerShape(27.dp),
+            color = if (isDark) AmoledBlack else CrystalWhite,
+            border = BorderStroke(0.6.dp, if (isDark) Color(0xFF1E1E24) else Color(0xFFE4E4E7))
         ) {
             Row(
                 modifier = Modifier
@@ -982,7 +1132,7 @@ fun NoteEditorScreen(
                         Icon(
                             imageVector = Icons.Outlined.Add,
                             contentDescription = "Add block",
-                            tint = MaterialTheme.colorScheme.onSurface,
+                            tint = if (isDark) ElectricGreen else AmoledBlack,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -990,7 +1140,7 @@ fun NoteEditorScreen(
                     DropdownMenu(
                         expanded = showAddBlockMenu,
                         onDismissRequest = { showAddBlockMenu = false },
-                        modifier = Modifier.background(MaterialTheme.colorScheme.surface)
+                        modifier = Modifier.background(if (isDark) AmoledBlack else CrystalWhite)
                     ) {
                         DropdownMenuItem(
                             text = { Text("Checklist Item") },
@@ -1024,6 +1174,24 @@ fun NoteEditorScreen(
                             onClick = {
                                 showAddBlockMenu = false
                                 ocrImagePickerLauncher.launch("image/*")
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Record Voice Note") },
+                            leadingIcon = { Icon(Icons.Outlined.Mic, null) },
+                            onClick = {
+                                showAddBlockMenu = false
+                                voiceSheetTab = 0
+                                showVoiceSheet = true
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Voice to Text (Offline)") },
+                            leadingIcon = { Icon(Icons.Outlined.RecordVoiceOver, null) },
+                            onClick = {
+                                showAddBlockMenu = false
+                                voiceSheetTab = 1
+                                showVoiceSheet = true
                             }
                         )
                         DropdownMenuItem(
@@ -1133,6 +1301,22 @@ fun NoteEditorScreen(
                     }
                 }
 
+                // Voice Note / Speech to Text button
+                IconButton(
+                    onClick = {
+                        voiceSheetTab = 0
+                        showVoiceSheet = true
+                    },
+                    modifier = Modifier.size(34.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Mic,
+                        contentDescription = "Voice note & dictation",
+                        tint = currentTheme.accent,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
                 // Link button
                 IconButton(
                     onClick = { viewModel.updateContent(uiState.content + "\nhttps://") },
@@ -1224,6 +1408,32 @@ fun NoteEditorScreen(
                 }
             }
         }
+    }
+
+        if (showNoSecurityDialog) {
+            AlertDialog(
+                onDismissRequest = { showNoSecurityDialog = false },
+                title = { Text("Screen Lock Required") },
+                text = {
+                    Text("To lock notes with system security, please set up a PIN, pattern, password, or biometric in your device Settings.")
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            showNoSecurityDialog = false
+                            BiometricAuthHelper.openSecuritySettings(context)
+                        }
+                    ) {
+                        Text("Open Settings")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showNoSecurityDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
 
         // Antinote Theme Selection Sheet
         if (showThemeSheet) {
@@ -1287,6 +1497,21 @@ fun NoteEditorScreen(
                 onDismiss = { fullscreenImageUri = null }
             )
         }
+
+        // Voice Recording Bottom Sheet (Opus recording & offline speech-to-text)
+        if (showVoiceSheet) {
+            VoiceRecordingSheet(
+                initialTab = voiceSheetTab,
+                accentColor = currentTheme.accent,
+                onSaveVoiceNote = { audioFile, transcript ->
+                    viewModel.addVoiceNote("file://${audioFile.absolutePath}", transcript)
+                },
+                onInsertText = { text ->
+                    viewModel.insertExtractedText(text, focusedBlockId ?: lastFocusedBlockId)
+                },
+                onDismiss = { showVoiceSheet = false }
+            )
+        }
     }
 }
 
@@ -1335,150 +1560,166 @@ private fun ChecklistItemRow(
     }
 
     Row(
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.Top,
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 3.dp)
+            .padding(vertical = 4.dp)
     ) {
         Icon(
             imageVector = if (block.isChecked) Icons.Outlined.CheckBox else Icons.Outlined.CheckBoxOutlineBlank,
             contentDescription = if (block.isChecked) "Completed task" else "Incomplete task",
             tint = if (block.isChecked) currentTheme.textSecondary else currentTheme.accent,
             modifier = Modifier
-                .size(19.dp)
+                .padding(top = 2.dp)
+                .size(21.dp)
                 .clickable { onCheckedChange(!block.isChecked) }
         )
-        Spacer(modifier = Modifier.width(8.dp))
-        BasicTextField(
-            value = textFieldValue,
-            onValueChange = { newValue ->
-                textFieldValue = newValue
-                if (newValue.text != block.text) {
-                    onTextChange(newValue.text)
-                }
-            },
-            modifier = Modifier
-                .weight(1f)
-                .focusRequester(focusRequester)
-                .onFocusChanged { focusState ->
-                    onFocusChanged(focusState.isFocused)
-                }
-                .onPreviewKeyEvent { event ->
-                    if (event.key == Key.Backspace && event.type == KeyEventType.KeyDown) {
-                        if (textFieldValue.text.isEmpty()) {
-                            onBackspaceOnEmpty()
-                            true
-                        } else {
-                            false
-                        }
-                    } else if ((event.key == Key.Enter || event.key == Key.NumPadEnter) && event.type == KeyEventType.KeyDown) {
-                        onNext(textFieldValue.text)
-                        true
-                    } else {
-                        false
-                    }
-                }
-                .onKeyEvent { event ->
-                    if (event.key == Key.Backspace && (event.type == KeyEventType.KeyDown || event.type == KeyEventType.KeyUp)) {
-                        if (textFieldValue.text.isEmpty()) {
-                            if (event.type == KeyEventType.KeyDown) {
-                                onBackspaceOnEmpty()
-                            }
-                            true
-                        } else {
-                            false
-                        }
-                    } else if ((event.key == Key.Enter || event.key == Key.NumPadEnter) && (event.type == KeyEventType.KeyDown || event.type == KeyEventType.KeyUp)) {
-                        if (event.type == KeyEventType.KeyDown) {
-                            onNext(textFieldValue.text)
-                        }
-                        true
-                    } else {
-                        false
+        Spacer(modifier = Modifier.width(10.dp))
+        Column(
+            modifier = Modifier.weight(1f)
+        ) {
+            BasicTextField(
+                value = textFieldValue,
+                onValueChange = { newValue ->
+                    textFieldValue = newValue
+                    if (newValue.text != block.text) {
+                        onTextChange(newValue.text)
                     }
                 },
-            textStyle = TextStyle(
-                fontFamily = currentTheme.fontFamily,
-                fontSize = 15.sp,
-                lineHeight = 22.sp,
-                color = if (block.isChecked) currentTheme.textSecondary else currentTheme.textPrimary,
-                textDecoration = if (block.isChecked) TextDecoration.LineThrough else null
-            ),
-            cursorBrush = SolidColor(currentTheme.cursorColor),
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-            keyboardActions = KeyboardActions(
-                onNext = { onNext(textFieldValue.text) },
-                onDone = { onNext(textFieldValue.text) }
-            ),
-            decorationBox = { innerTextField ->
-                Box {
-                    if (textFieldValue.text.isEmpty()) {
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focusRequester)
+                    .onFocusChanged { focusState ->
+                        onFocusChanged(focusState.isFocused)
+                    }
+                    .onPreviewKeyEvent { event ->
+                        if (event.key == Key.Backspace && event.type == KeyEventType.KeyDown) {
+                            if (textFieldValue.text.isEmpty()) {
+                                onBackspaceOnEmpty()
+                                true
+                            } else {
+                                false
+                            }
+                        } else if ((event.key == Key.Enter || event.key == Key.NumPadEnter) && event.type == KeyEventType.KeyDown) {
+                            if (event.isShiftPressed) {
+                                false
+                            } else {
+                                onNext(textFieldValue.text)
+                                true
+                            }
+                        } else {
+                            false
+                        }
+                    }
+                    .onKeyEvent { event ->
+                        if (event.key == Key.Backspace && (event.type == KeyEventType.KeyDown || event.type == KeyEventType.KeyUp)) {
+                            if (textFieldValue.text.isEmpty()) {
+                                if (event.type == KeyEventType.KeyDown) {
+                                    onBackspaceOnEmpty()
+                                }
+                                true
+                            } else {
+                                false
+                            }
+                        } else if ((event.key == Key.Enter || event.key == Key.NumPadEnter) && (event.type == KeyEventType.KeyDown || event.type == KeyEventType.KeyUp)) {
+                            if (event.isShiftPressed) {
+                                false
+                            } else {
+                                if (event.type == KeyEventType.KeyDown) {
+                                    onNext(textFieldValue.text)
+                                }
+                                true
+                            }
+                        } else {
+                            false
+                        }
+                    },
+                textStyle = TextStyle(
+                    fontFamily = currentTheme.fontFamily,
+                    fontSize = 17.sp,
+                    lineHeight = 25.sp,
+                    color = if (block.isChecked) currentTheme.textSecondary else currentTheme.textPrimary,
+                    textDecoration = if (block.isChecked) TextDecoration.LineThrough else null
+                ),
+                cursorBrush = SolidColor(currentTheme.cursorColor),
+                singleLine = false,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                keyboardActions = KeyboardActions(
+                    onNext = { onNext(textFieldValue.text) },
+                    onDone = { onNext(textFieldValue.text) }
+                ),
+                decorationBox = { innerTextField ->
+                    Box {
+                        if (textFieldValue.text.isEmpty()) {
+                            Text(
+                                text = "To-do",
+                                fontFamily = currentTheme.fontFamily,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = currentTheme.textSecondary.copy(alpha = 0.45f),
+                                fontSize = 17.sp
+                            )
+                        }
+                        innerTextField()
+                    }
+                }
+            )
+
+            if (block.reminder != null) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = currentTheme.accent.copy(alpha = 0.14f),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .clickable { onReminderClick?.invoke() }
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp)
+                    ) {
+                        Text("🔔", fontSize = 10.sp)
+                        Spacer(modifier = Modifier.width(3.dp))
                         Text(
-                            text = "To-do",
+                            text = block.reminder.displayText,
                             fontFamily = currentTheme.fontFamily,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = currentTheme.textSecondary.copy(alpha = 0.45f),
-                            fontSize = 15.sp
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 11.sp,
+                            color = currentTheme.accent
                         )
                     }
-                    innerTextField()
-                }
-            }
-        )
-
-        if (block.reminder != null) {
-            Spacer(modifier = Modifier.width(6.dp))
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = currentTheme.accent.copy(alpha = 0.12f),
-                border = BorderStroke(1.dp, currentTheme.accent.copy(alpha = 0.35f)),
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable { onReminderClick?.invoke() }
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
-                ) {
-                    Text("🔔", fontSize = 11.sp)
-                    Spacer(modifier = Modifier.width(3.dp))
-                    Text(
-                        text = block.reminder.displayText,
-                        fontFamily = currentTheme.fontFamily,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp,
-                        color = currentTheme.accent,
-                        textDecoration = TextDecoration.Underline
-                    )
                 }
             }
         }
 
-        if (block.reminder == null) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(top = 1.dp)
+        ) {
+            if (block.reminder == null) {
+                IconButton(
+                    onClick = { onReminderClick?.invoke() },
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Notifications,
+                        contentDescription = "Add reminder to task",
+                        tint = currentTheme.textSecondary.copy(alpha = 0.35f),
+                        modifier = Modifier.size(13.dp)
+                    )
+                }
+            }
+
             IconButton(
-                onClick = { onReminderClick?.invoke() },
+                onClick = onDelete,
                 modifier = Modifier.size(24.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Outlined.Notifications,
-                    contentDescription = "Add reminder to task",
+                    imageVector = Icons.Outlined.Close,
+                    contentDescription = "Delete task",
                     tint = currentTheme.textSecondary.copy(alpha = 0.35f),
                     modifier = Modifier.size(13.dp)
                 )
             }
-        }
-
-        IconButton(
-            onClick = onDelete,
-            modifier = Modifier.size(24.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.Close,
-                contentDescription = "Delete task",
-                tint = currentTheme.textSecondary.copy(alpha = 0.35f),
-                modifier = Modifier.size(13.dp)
-            )
         }
     }
 }
@@ -1538,15 +1779,14 @@ private fun TextBlockItem(
                 reminders.forEach { reminder ->
                     Surface(
                         shape = RoundedCornerShape(8.dp),
-                        color = currentTheme.accent.copy(alpha = 0.12f),
-                        border = BorderStroke(1.dp, currentTheme.accent.copy(alpha = 0.35f)),
+                        color = currentTheme.accent.copy(alpha = 0.14f),
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
                             .clickable { onReminderClick?.invoke(reminder) }
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp)
                         ) {
                             Text("🔔", fontSize = 11.sp)
                             Spacer(modifier = Modifier.width(3.dp))
@@ -1555,8 +1795,7 @@ private fun TextBlockItem(
                                 fontFamily = currentTheme.fontFamily,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 12.sp,
-                                color = currentTheme.accent,
-                                textDecoration = TextDecoration.Underline
+                                color = currentTheme.accent
                             )
                         }
                     }
@@ -1599,6 +1838,87 @@ private fun TextBlockItem(
                 innerTextField()
             }
         )
+    }
+}
+
+@Composable
+private fun LockedNoteBarrier(
+    title: String,
+    currentTheme: NoteTheme,
+    isDark: Boolean,
+    onUnlockClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = if (isDark) AmoledBlack else currentTheme.border.copy(alpha = 0.5f),
+                border = BorderStroke(0.6.dp, if (isDark) Color(0xFF1E1E24) else currentTheme.border),
+                modifier = Modifier.size(84.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Outlined.Lock,
+                        contentDescription = "Locked",
+                        tint = ElectricAmber,
+                        modifier = Modifier.size(40.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = currentTheme.textPrimary,
+                fontSize = 20.sp,
+                maxLines = 2,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "This note is secured with system lock",
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (isDark) Color(0xFF888888) else currentTheme.textSecondary,
+                fontSize = 14.sp
+            )
+
+            Spacer(modifier = Modifier.height(28.dp))
+
+            Button(
+                onClick = onUnlockClick,
+                shape = CircleShape,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isDark) ElectricGreen else AmoledBlack,
+                    contentColor = if (isDark) AmoledBlack else CrystalWhite
+                ),
+                contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Fingerprint,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Unlock Note",
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 15.sp
+                )
+            }
+        }
     }
 }
 

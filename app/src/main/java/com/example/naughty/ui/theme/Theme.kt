@@ -8,6 +8,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -29,31 +30,31 @@ fun Context.themePreferenceFlow(): Flow<ThemeMode> =
     }
 
 private val LightColorScheme = lightColorScheme(
-    primary = LightAccent,
-    onPrimary = PureWhiteSurface,
+    primary = AmoledBlack,
+    onPrimary = CrystalWhite,
     primaryContainer = LightAccentContainer,
-    onPrimaryContainer = LightAccent,
+    onPrimaryContainer = Color(0xFF047857),
     secondary = LightTextSecondary,
-    onSecondary = PureWhiteSurface,
-    background = WarmLinenLight,
+    onSecondary = CrystalWhite,
+    background = CrystalWhite,
     onBackground = WarmTextPrimaryLight,
-    surface = PureWhiteSurface,
+    surface = CrystalWhite,
     onSurface = WarmTextPrimaryLight,
     surfaceVariant = LightSurfaceVariant,
     onSurfaceVariant = WarmTextSecondaryLight,
     outline = LightOutline,
     error = LightError,
-    onError = PureWhiteSurface
+    onError = CrystalWhite
 )
 
 private val DarkColorScheme = darkColorScheme(
-    primary = StealthFabWhite,
-    onPrimary = StealthFabBlack,
-    primaryContainer = StealthAppBadgePill,
-    onPrimaryContainer = StealthAppBadgeText,
+    primary = ElectricGreen,
+    onPrimary = AmoledBlack,
+    primaryContainer = Color(0xFF0F2E20),
+    onPrimaryContainer = ElectricGreen,
     secondary = StealthTextSecondary,
-    onSecondary = StealthDarkBackground,
-    background = StealthDarkBackground,
+    onSecondary = AmoledBlack,
+    background = AmoledBlack,
     onBackground = StealthTextPrimary,
     surface = StealthCardSurface,
     onSurface = StealthTextPrimary,
@@ -61,7 +62,7 @@ private val DarkColorScheme = darkColorScheme(
     onSurfaceVariant = StealthTextSecondary,
     outline = StealthCardBorder,
     error = DarkError,
-    onError = StealthFabBlack
+    onError = AmoledBlack
 )
 
 @Composable
@@ -88,4 +89,4 @@ fun NaughtyTheme(
 }
 
 @Composable
-fun isAppInDarkTheme(): Boolean = MaterialTheme.colorScheme.background == StealthDarkBackground
+fun isAppInDarkTheme(): Boolean = MaterialTheme.colorScheme.background == AmoledBlack

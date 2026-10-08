@@ -9,10 +9,10 @@ import androidx.compose.ui.unit.sp
 
 val BrandTitleStyle = TextStyle(
     fontFamily = FontFamily.SansSerif,
-    fontWeight = FontWeight.SemiBold,
+    fontWeight = FontWeight.Bold,
     fontSize = 17.sp,
     lineHeight = 22.sp,
-    letterSpacing = 0.5.sp
+    letterSpacing = 1.2.sp
 )
 
 val BrandSubtitleStyle = TextStyle(

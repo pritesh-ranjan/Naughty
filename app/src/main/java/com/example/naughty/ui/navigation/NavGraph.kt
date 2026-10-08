@@ -8,3 +8,9 @@ data object NoteListKey : NavKey
 
 @Serializable
 data class NoteEditorKey(val noteId: String) : NavKey
+
+@Serializable
+data object TimelineListKey : NavKey
+
+@Serializable
+data class TimelineDetailKey(val trackerId: String) : NavKey

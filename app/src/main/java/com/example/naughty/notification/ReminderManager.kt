@@ -31,7 +31,8 @@ class ReminderManager(private val context: Context) {
         reminderId: Int,
         title: String,
         contentSnippet: String,
-        triggerAtMillis: Long
+        triggerAtMillis: Long,
+        trackerId: String? = null
     ) {
         if (triggerAtMillis <= System.currentTimeMillis()) return
 
@@ -41,6 +42,9 @@ class ReminderManager(private val context: Context) {
             putExtra(EXTRA_REMINDER_ID, reminderId)
             putExtra(EXTRA_TITLE, title.ifBlank { "Untitled Note" })
             putExtra(EXTRA_CONTENT, contentSnippet)
+            if (trackerId != null) {
+                putExtra(EXTRA_TRACKER_ID, trackerId)
+            }
         }
 
         val pendingIntent = PendingIntent.getBroadcast(
@@ -107,11 +111,17 @@ class ReminderManager(private val context: Context) {
         noteId: String,
         notificationId: Int,
         title: String,
-        contentSnippet: String
+        contentSnippet: String,
+        trackerId: String? = null
     ) {
         val openIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-            putExtra("noteId", noteId)
+            if (!noteId.isNullOrBlank()) {
+                putExtra("noteId", noteId)
+            }
+            if (!trackerId.isNullOrBlank()) {
+                putExtra("trackerId", trackerId)
+            }
         }
 
         val openPendingIntent = PendingIntent.getActivity(
@@ -121,8 +131,9 @@ class ReminderManager(private val context: Context) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val displayTitle = title.ifBlank { "Note Reminder" }
-        val displayContent = contentSnippet.ifBlank { "You set a reminder for this note." }
+        val displayTitle = title.ifBlank { if (trackerId != null) "Timeline Reminder" else "Note Reminder" }
+        val displayContent = contentSnippet.ifBlank { "You have a scheduled reminder." }
+        val actionText = if (!trackerId.isNullOrBlank()) "Open Tracker" else "Open Note"
 
         val notification = NotificationCompat.Builder(context, REMINDER_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
@@ -137,7 +148,7 @@ class ReminderManager(private val context: Context) {
             .setContentIntent(openPendingIntent)
             .addAction(
                 R.drawable.ic_launcher_foreground,
-                "Open Note",
+                actionText,
                 openPendingIntent
             )
             .build()
@@ -165,6 +176,7 @@ class ReminderManager(private val context: Context) {
         const val ACTION_FIRE_REMINDER = "com.example.naughty.action.FIRE_REMINDER"
 
         const val EXTRA_NOTE_ID = "extra_note_id"
+        const val EXTRA_TRACKER_ID = "extra_tracker_id"
         const val EXTRA_REMINDER_ID = "extra_reminder_id"
         const val EXTRA_TITLE = "extra_title"
         const val EXTRA_CONTENT = "extra_content"

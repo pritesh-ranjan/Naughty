@@ -62,6 +62,9 @@ interface NoteMetadataDao {
     @Query("UPDATE note_metadata SET reminderTime = :reminderTime, modifiedAt = :modifiedAt WHERE id = :id")
     suspend fun updateReminderTime(id: String, reminderTime: Long?, modifiedAt: Long = System.currentTimeMillis())
 
+    @Query("UPDATE note_metadata SET isLocked = :isLocked, modifiedAt = :modifiedAt WHERE id = :id")
+    suspend fun updateLockStatus(id: String, isLocked: Boolean, modifiedAt: Long = System.currentTimeMillis())
+
     @Query("SELECT * FROM note_metadata WHERE reminderTime IS NOT NULL AND reminderTime > :now AND isDeleted = 0")
     suspend fun getNotesWithPendingReminders(now: Long = System.currentTimeMillis()): List<NoteMetadata>
 

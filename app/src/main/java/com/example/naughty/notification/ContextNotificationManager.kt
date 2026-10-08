@@ -65,6 +65,8 @@ class ContextNotificationManager(
             .replace(Regex("!\\[.*?\\]\\(.*?\\)"), "")
             // Remove leftover [image] or similar placeholders
             .replace(Regex("\\[image\\]", RegexOption.IGNORE_CASE), "")
+            // Remove voice note tags [🎤 Voice Note](file://...)
+            .replace(Regex("\\[🎤\\s*Voice Note\\]\\(.*?\\)", RegexOption.IGNORE_CASE), "")
             // Remove reminder tags [text](reminder:timestamp)
             .replace(Regex("\\[.*?\\]\\(reminder:\\d+\\)"), "")
             // Remove remaining markdown formatting chars
@@ -85,7 +87,13 @@ class ContextNotificationManager(
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val contentDisplay = if (preview.isNotBlank()) preview else "Tap to view contextual note"
+        val contentDisplay = if (note.metadata.isLocked) {
+            "Locked note • Tap to unlock"
+        } else if (preview.isNotBlank()) {
+            preview
+        } else {
+            "Tap to view contextual note"
+        }
 
         val notification = NotificationCompat.Builder(context, CONTEXT_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)

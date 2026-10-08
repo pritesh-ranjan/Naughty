@@ -45,7 +45,8 @@ class NoteRepository(
         tag: String = "",
         colorTheme: String? = null,
         cardType: String = "modular",
-        isPinned: Boolean = false
+        isPinned: Boolean = false,
+        isLocked: Boolean = false
     ): NoteMetadata {
         val id = UUID.randomUUID().toString()
         val now = System.currentTimeMillis()
@@ -72,7 +73,8 @@ class NoteRepository(
             fileName = fileName,
             tag = tag,
             colorTheme = assignedTheme,
-            cardType = cardType
+            cardType = cardType,
+            isLocked = isLocked
         )
 
         fileManager.writeNote(fileName, content)
@@ -121,6 +123,10 @@ class NoteRepository(
     suspend fun togglePin(id: String) {
         val existing = dao.getById(id) ?: return
         dao.update(existing.copy(isPinned = !existing.isPinned, modifiedAt = System.currentTimeMillis()))
+    }
+
+    suspend fun toggleLock(id: String, isLocked: Boolean) {
+        dao.updateLockStatus(id, isLocked)
     }
 
     suspend fun toggleArchive(id: String) {
