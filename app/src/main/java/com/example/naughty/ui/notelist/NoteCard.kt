@@ -1,13 +1,14 @@
 package com.example.naughty.ui.notelist
 
 import android.graphics.BitmapFactory
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,13 +19,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PushPin
-import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.CheckBox
 import androidx.compose.material.icons.outlined.CheckBoxOutlineBlank
+import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -35,6 +38,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -53,6 +59,8 @@ import com.example.naughty.ui.theme.ElectricGreen
 import com.example.naughty.ui.theme.StealthTextMuted
 import com.example.naughty.ui.theme.getNoteColorPalette
 import com.example.naughty.ui.theme.isAppInDarkTheme
+import com.example.naughty.util.AudioRecorderHelper
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -438,6 +446,18 @@ private fun ChecklistCardContent(
         )
     }
 
+    val firstVoiceNote = remember(rawContent) {
+        EditorBlockParser.extractVoiceNotes(rawContent).firstOrNull()
+    }
+    if (!firstVoiceNote.isNullOrBlank()) {
+        Spacer(modifier = Modifier.height(8.dp))
+        VoiceNoteCardBadge(
+            audioUriString = firstVoiceNote,
+            palette = palette,
+            isDark = isDark
+        )
+    }
+
     Spacer(modifier = Modifier.height(8.dp))
 
     Row(
@@ -539,6 +559,18 @@ private fun MarkdownNoteCardContent(
                     if (onImageClick != null) Modifier.clickable { onImageClick(attachedImageUri) }
                     else Modifier
                 )
+        )
+    }
+
+    val firstVoiceNote = remember(rawContent) {
+        EditorBlockParser.extractVoiceNotes(rawContent).firstOrNull()
+    }
+    if (!firstVoiceNote.isNullOrBlank()) {
+        Spacer(modifier = Modifier.height(8.dp))
+        VoiceNoteCardBadge(
+            audioUriString = firstVoiceNote,
+            palette = palette,
+            isDark = isDark
         )
     }
 
@@ -658,3 +690,105 @@ private fun formatNoteTimestamp(timestamp: Long): String {
         }
     }
 }
+
+@Composable
+fun VoiceNoteCardBadge(
+    audioUriString: String,
+    palette: com.example.naughty.ui.theme.NoteColorPalette,
+    isDark: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val cleanPath = remember(audioUriString) {
+        if (audioUriString.startsWith("file://")) audioUriString.removePrefix("file://") else audioUriString
+    }
+    val audioFile = remember(cleanPath) { File(cleanPath) }
+    val amplitudes = remember(cleanPath) {
+        AudioRecorderHelper.readWaveform(audioFile, targetCount = 18)
+    }
+    val durationText = remember(cleanPath) {
+        try {
+            if (audioFile.exists()) {
+                val mmr = MediaMetadataRetriever()
+                mmr.setDataSource(audioFile.absolutePath)
+                val durationStr = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                mmr.release()
+                val durMs = durationStr?.toLongOrNull() ?: 0L
+                if (durMs > 0) {
+                    val totalSec = durMs / 1000
+                    val min = totalSec / 60
+                    val sec = totalSec % 60
+                    "%d:%02d".format(Locale.US, min, sec)
+                } else null
+            } else null
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    val accent = palette.iconTint
+
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = if (isDark) accent.copy(alpha = 0.12f) else accent.copy(alpha = 0.08f),
+        border = BorderStroke(0.6.dp, accent.copy(alpha = 0.28f)),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = accent.copy(alpha = 0.18f),
+                modifier = Modifier.size(24.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Outlined.Mic,
+                        contentDescription = "Voice Note",
+                        tint = accent,
+                        modifier = Modifier.size(13.dp)
+                    )
+                }
+            }
+
+            Canvas(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(18.dp)
+            ) {
+                val barCount = amplitudes.size
+                if (barCount > 0) {
+                    val spacing = 2.dp.toPx()
+                    val totalSpacing = (barCount - 1) * spacing
+                    val barWidth = ((size.width - totalSpacing) / barCount).coerceAtLeast(1.5.dp.toPx())
+                    val maxHeight = size.height
+
+                    amplitudes.forEachIndexed { i, amp ->
+                        val x = i * (barWidth + spacing)
+                        val scaledAmp = kotlin.math.sqrt(amp.coerceIn(0.08f, 1.0f))
+                        val barHeight = (scaledAmp * maxHeight).coerceIn(3.dp.toPx(), maxHeight)
+                        val y = (maxHeight - barHeight) / 2f
+
+                        drawRoundRect(
+                            color = accent.copy(alpha = 0.85f),
+                            topLeft = Offset(x, y),
+                            size = Size(barWidth, barHeight),
+                            cornerRadius = CornerRadius(1.5.dp.toPx(), 1.5.dp.toPx())
+                        )
+                    }
+                }
+            }
+
+            Text(
+                text = durationText ?: "Voice Note",
+                style = MaterialTheme.typography.labelSmall,
+                color = accent,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+    }
+}
+

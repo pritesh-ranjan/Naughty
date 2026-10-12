@@ -278,4 +278,12 @@ class ShareIntentHandlerTest {
         assertEquals("checklist", result?.cardType)
         assertTrue(result!!.content.contains("![Image]"))
     }
+
+    @Test
+    fun testAudioShareModeValues() {
+        assertEquals(3, AudioShareMode.entries.size)
+        assertTrue(AudioShareMode.entries.contains(AudioShareMode.ATTACH_ONLY))
+        assertTrue(AudioShareMode.entries.contains(AudioShareMode.TRANSCRIBE_ONLY))
+        assertTrue(AudioShareMode.entries.contains(AudioShareMode.BOTH))
+    }
 }

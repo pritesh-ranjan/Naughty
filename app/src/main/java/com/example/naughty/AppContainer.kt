@@ -3,6 +3,8 @@ package com.example.naughty
 import android.content.Context
 import android.content.pm.PackageManager
 import androidx.room.Room
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.naughty.binding.BindingDetector
 import com.example.naughty.data.file.MarkdownFileManager
 import com.example.naughty.data.local.AppDatabase
@@ -107,12 +109,95 @@ class AppContainer(private val context: Context) {
         }
     }
 
+    private val migration7To8 = object : androidx.room.migration.Migration(7, 8) {
+        override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS `graph_node` (
+                    `id` TEXT NOT NULL,
+                    `noteId` TEXT NOT NULL,
+                    `nodeType` TEXT NOT NULL,
+                    `label` TEXT NOT NULL,
+                    `subtitle` TEXT NOT NULL DEFAULT '',
+                    `rawIdentifier` TEXT DEFAULT NULL,
+                    `attributesJson` TEXT NOT NULL DEFAULT '{}',
+                    `createdAt` INTEGER NOT NULL,
+                    `updatedAt` INTEGER NOT NULL,
+                    PRIMARY KEY(`id`),
+                    FOREIGN KEY(`noteId`) REFERENCES `note_metadata`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                )
+            """.trimIndent())
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_graph_node_noteId` ON `graph_node` (`noteId`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_graph_node_nodeType` ON `graph_node` (`nodeType`)")
+
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS `graph_edge` (
+                    `id` TEXT NOT NULL,
+                    `sourceNodeId` TEXT NOT NULL,
+                    `targetNodeId` TEXT NOT NULL,
+                    `relationType` TEXT NOT NULL,
+                    `confidenceScore` REAL NOT NULL,
+                    `createdAt` INTEGER NOT NULL,
+                    PRIMARY KEY(`id`),
+                    FOREIGN KEY(`sourceNodeId`) REFERENCES `graph_node`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
+                    FOREIGN KEY(`targetNodeId`) REFERENCES `graph_node`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                )
+            """.trimIndent())
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_graph_edge_sourceNodeId` ON `graph_edge` (`sourceNodeId`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_graph_edge_targetNodeId` ON `graph_edge` (`targetNodeId`)")
+
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS `graph_evidence` (
+                    `id` TEXT NOT NULL,
+                    `edgeId` TEXT NOT NULL,
+                    `sourceType` TEXT NOT NULL,
+                    `snippet` TEXT NOT NULL,
+                    `confidence` REAL NOT NULL,
+                    `timestamp` INTEGER NOT NULL,
+                    `metadataJson` TEXT NOT NULL DEFAULT '{}',
+                    PRIMARY KEY(`id`),
+                    FOREIGN KEY(`edgeId`) REFERENCES `graph_edge`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                )
+            """.trimIndent())
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_graph_evidence_edgeId` ON `graph_evidence` (`edgeId`)")
+
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS `recent_notification_log` (
+                    `id` TEXT NOT NULL,
+                    `packageName` TEXT NOT NULL,
+                    `title` TEXT NOT NULL DEFAULT '',
+                    `text` TEXT NOT NULL DEFAULT '',
+                    `postTime` INTEGER NOT NULL,
+                    PRIMARY KEY(`id`)
+                )
+            """.trimIndent())
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_recent_notification_log_postTime` ON `recent_notification_log` (`postTime`)")
+        }
+    }
+
+    private val migration8To9 = object : Migration(8, 9) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // Merge all archived notes into deleted notes (soft deleted)
+            db.execSQL("UPDATE note_metadata SET isDeleted = 1, isArchived = 0 WHERE isArchived = 1")
+            // Clean up any app bindings associated with soft-deleted notes
+            db.execSQL("DELETE FROM app_binding WHERE noteId IN (SELECT id FROM note_metadata WHERE isDeleted = 1)")
+        }
+    }
+
+    private val migration9To10 = object : Migration(9, 10) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("DROP TABLE IF EXISTS `graph_evidence`")
+            db.execSQL("DROP TABLE IF EXISTS `graph_edge`")
+            db.execSQL("DROP TABLE IF EXISTS `graph_node`")
+            db.execSQL("DROP TABLE IF EXISTS `recent_notification_log`")
+        }
+    }
+
     private val database: AppDatabase = Room.databaseBuilder(
         context.applicationContext,
         AppDatabase::class.java,
         "naughty_db"
     )
-        .addMigrations(migration2To3, migration3To4, migration4To5, migration5To6, migration6To7)
+        .addMigrations(migration2To3, migration3To4, migration4To5, migration5To6, migration6To7, migration7To8, migration8To9, migration9To10)
         .fallbackToDestructiveMigration()
         .build()
 
@@ -120,7 +205,8 @@ class AppContainer(private val context: Context) {
 
     val noteRepository = NoteRepository(
         dao = database.noteMetadataDao(),
-        fileManager = markdownFileManager
+        fileManager = markdownFileManager,
+        bindingDao = database.appBindingDao()
     )
 
     val bindingRepository = BindingRepository(
@@ -151,6 +237,7 @@ class AppContainer(private val context: Context) {
     // ViewModel factories
     fun noteListViewModel() = NoteListViewModel(noteRepository, bindingRepository, timelineRepository)
     fun noteEditorViewModel() = NoteEditorViewModel(noteRepository, bindingRepository, reminderManager)
+    fun settingsViewModel() = com.example.naughty.ui.settings.SettingsViewModel(noteRepository, bindingRepository)
     fun bindingViewModel() = BindingViewModel(bindingRepository, packageManager, context.applicationContext)
     fun timelineListViewModel() = TimelineListViewModel(timelineRepository)
     fun timelineDetailViewModel(trackerId: String) = TimelineDetailViewModel(trackerId, timelineRepository, reminderManager)

@@ -30,6 +30,18 @@ data class PendingImageShare(
     val text: String?
 )
 
+enum class AudioShareMode {
+    ATTACH_ONLY,
+    TRANSCRIBE_ONLY,
+    BOTH
+}
+
+data class PendingAudioShare(
+    val uris: List<Uri>,
+    val subject: String?,
+    val text: String?
+)
+
 object ShareIntentHandler {
 
     private const val EXTRA_HANDLED_SHARE = "com.example.naughty.HANDLED_SHARE"
@@ -390,6 +402,180 @@ object ShareIntentHandler {
         )
     }
 
+    fun extractAudioUris(intent: Intent): List<Uri> {
+        val uris = mutableListOf<Uri>()
+
+        if (intent.action == Intent.ACTION_SEND_MULTIPLE) {
+            try {
+                val streamList = IntentCompat.getParcelableArrayListExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
+                if (streamList != null) {
+                    uris.addAll(streamList.filterNotNull())
+                }
+            } catch (_: Exception) {}
+        } else {
+            try {
+                val singleStream = IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
+                if (singleStream != null) {
+                    uris.add(singleStream)
+                }
+            } catch (_: Exception) {}
+        }
+
+        val clipData = intent.clipData
+        if (clipData != null) {
+            for (i in 0 until clipData.itemCount) {
+                val itemUri = clipData.getItemAt(i)?.uri
+                if (itemUri != null && itemUri !in uris) {
+                    uris.add(itemUri)
+                }
+            }
+        }
+
+        val dataUri = intent.data
+        if (dataUri != null && dataUri !in uris) {
+            uris.add(dataUri)
+        }
+
+        return uris.distinct()
+    }
+
+    fun extractAudioShare(intent: Intent): PendingAudioShare? {
+        val action = intent.action ?: return null
+        val type = intent.type
+        val isAudioAction = (type?.startsWith("audio/") == true) ||
+                (type?.contains("ogg", ignoreCase = true) == true) ||
+                (type?.contains("opus", ignoreCase = true) == true)
+
+        val uris = extractAudioUris(intent)
+        val hasAudioUri = uris.any { uri ->
+            val path = uri.path?.lowercase().orEmpty()
+            path.endsWith(".opus") || path.endsWith(".ogg") || path.endsWith(".m4a") ||
+                    path.endsWith(".mp3") || path.endsWith(".wav") || path.endsWith(".aac")
+        }
+
+        if (!isAudioAction && !hasAudioUri) return null
+        if (uris.isEmpty()) return null
+
+        val subject = intent.getStringExtra(Intent.EXTRA_SUBJECT)
+            ?: intent.getCharSequenceExtra(Intent.EXTRA_SUBJECT)?.toString()
+            ?: intent.getStringExtra(Intent.EXTRA_TITLE)
+
+        val text = intent.getStringExtra(Intent.EXTRA_TEXT)
+            ?: intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()
+            ?: intent.clipData?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString()
+
+        return PendingAudioShare(uris = uris, subject = subject, text = text)
+    }
+
+    fun copyAudioUriToInternalStorage(context: Context, uri: Uri): File? {
+        return try {
+            val audioDir = File(context.filesDir, "note_audio").apply { mkdirs() }
+            val mimeType = try { context.contentResolver.getType(uri) } catch (_: Exception) { null }
+            val path = uri.path?.lowercase().orEmpty()
+            val ext = when {
+                mimeType?.contains("opus") == true || path.endsWith(".opus") -> "opus"
+                mimeType?.contains("ogg") == true || path.endsWith(".ogg") -> "opus"
+                mimeType?.contains("mp4") == true || mimeType?.contains("m4a") == true || path.endsWith(".m4a") -> "m4a"
+                mimeType?.contains("wav") == true || path.endsWith(".wav") -> "wav"
+                mimeType?.contains("mpeg") == true || mimeType?.contains("mp3") == true || path.endsWith(".mp3") -> "mp3"
+                else -> "opus"
+            }
+            val fileName = "audio_${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(6)}.$ext"
+            val destFile = File(audioDir, fileName)
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                destFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            } ?: return null
+            destFile
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    suspend fun processAudioShare(
+        context: Context,
+        share: PendingAudioShare,
+        mode: AudioShareMode,
+        repository: NoteRepository
+    ): NoteMetadata? = withContext(Dispatchers.IO) {
+        val savedAudioFiles = share.uris.mapNotNull { copyAudioUriToInternalStorage(context, it) }
+        if (savedAudioFiles.isEmpty() && share.text.isNullOrBlank() && share.subject.isNullOrBlank()) {
+            return@withContext null
+        }
+
+        val accompanying = share.text?.trim().orEmpty()
+        val cleanSubject = share.subject?.trim().orEmpty()
+        val audioMarkdown = savedAudioFiles.joinToString("\n\n") { "[🎤 Voice Note](file://${it.absolutePath})" }
+
+        var transcript = ""
+        if (mode == AudioShareMode.TRANSCRIBE_ONLY || mode == AudioShareMode.BOTH) {
+            val transcriptList = mutableListOf<String>()
+            for (audioFile in savedAudioFiles) {
+                val existing = AudioRecorderHelper.readTranscript(audioFile)
+                if (!existing.isNullOrBlank()) {
+                    transcriptList.add(existing)
+                } else {
+                    val transcriptionHelper = SpeechTranscriptionHelper(context)
+                    val deferred = kotlinx.coroutines.CompletableDeferred<String?>()
+                    transcriptionHelper.transcribeAudioFile(
+                        audioFile = audioFile,
+                        onFinal = { text -> deferred.complete(text) },
+                        onError = { deferred.complete(null) }
+                    )
+                    val res = deferred.await()
+                    if (!res.isNullOrBlank()) {
+                        AudioRecorderHelper.saveTranscript(audioFile, res)
+                        transcriptList.add(res)
+                    }
+                }
+            }
+            transcript = transcriptList.joinToString("\n\n")
+        }
+
+        val content = when (mode) {
+            AudioShareMode.ATTACH_ONLY -> {
+                if (accompanying.isNotBlank()) "$accompanying\n\n$audioMarkdown" else audioMarkdown
+            }
+            AudioShareMode.TRANSCRIBE_ONLY -> {
+                if (transcript.isNotBlank()) {
+                    if (accompanying.isNotBlank()) "$accompanying\n\n$transcript" else transcript
+                } else {
+                    if (accompanying.isNotBlank()) "$accompanying\n\n$audioMarkdown" else audioMarkdown
+                }
+            }
+            AudioShareMode.BOTH -> {
+                val textPart = when {
+                    transcript.isNotBlank() && accompanying.isNotBlank() -> "$accompanying\n\n$transcript"
+                    transcript.isNotBlank() -> transcript
+                    accompanying.isNotBlank() -> accompanying
+                    else -> ""
+                }
+                if (textPart.isNotBlank() && audioMarkdown.isNotBlank()) {
+                    "$textPart\n\n$audioMarkdown"
+                } else if (audioMarkdown.isNotBlank()) {
+                    audioMarkdown
+                } else {
+                    textPart
+                }
+            }
+        }
+
+        val title = when {
+            cleanSubject.isNotBlank() -> cleanSubject
+            accompanying.isNotBlank() -> cleanTitleFromText(accompanying)
+            transcript.isNotBlank() -> cleanTitleFromText(transcript)
+            savedAudioFiles.size == 1 -> "Voice note"
+            else -> "${savedAudioFiles.size} Voice notes"
+        }
+
+        repository.createNote(
+            title = title,
+            content = content,
+            cardType = "modular"
+        )
+    }
+
     suspend fun processShareIntent(
         context: Context,
         intent: Intent,
@@ -407,6 +593,16 @@ object ShareIntentHandler {
                     context = context,
                     share = imageShare,
                     mode = ImageShareMode.IMAGE_ONLY,
+                    repository = repository
+                )
+            }
+
+            val audioShare = extractAudioShare(intent)
+            if (audioShare != null) {
+                return@withContext processAudioShare(
+                    context = context,
+                    share = audioShare,
+                    mode = AudioShareMode.ATTACH_ONLY,
                     repository = repository
                 )
             }

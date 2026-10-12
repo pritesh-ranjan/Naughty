@@ -177,197 +177,6 @@ class NoteEditorViewModel(
         }
     }
 
-    fun addOrUpdateInlineReminder(
-        lineText: String,
-        updatedReminderText: String? = null,
-        timeMillis: Long,
-        isCalendar: Boolean,
-        context: Context? = null
-    ) {
-        val currentContent = _uiState.value.content
-        val isChecked = lineText.contains("- [x]", ignoreCase = true)
-        val prefix = if (lineText.trim().startsWith("- [")) {
-            if (isChecked) "- [x] " else "- [ ] "
-        } else ""
-
-        val rawClean = InlineReminderParser.removeReminderFromLine(
-            lineText.replace(Regex("""^[-*]\s*\[[ xX]?\]\s*"""), "")
-        ).trim()
-        val textToUse = updatedReminderText?.trim()?.ifBlank { null } ?: rawClean
-        val tag = InlineReminderParser.createReminderTag(timeMillis)
-        val updatedLine = "$prefix$textToUse $tag"
-
-        val updatedContent = if (currentContent.contains(lineText)) {
-            currentContent.replace(lineText, updatedLine)
-        } else {
-            currentContent.trimEnd() + "\n" + updatedLine
-        }
-        updateContent(updatedContent)
-
-        val oldReminder = InlineReminderParser.extractFirstReminder(lineText)
-        if (oldReminder != null && oldReminder.timestampMillis != timeMillis) {
-            reminderManager.cancelReminder(oldReminder.timestampMillis.hashCode())
-        }
-
-        reminderManager.scheduleReminder(
-            noteId = _uiState.value.noteId,
-            reminderId = timeMillis.hashCode(),
-            title = textToUse.ifBlank { _uiState.value.title.ifBlank { "Task Reminder" } },
-            contentSnippet = "Note: ${_uiState.value.title.ifBlank { "Untitled" }}",
-            triggerAtMillis = timeMillis
-        )
-
-        if (isCalendar && context != null) {
-            val calIntent = ReminderManager.createCalendarIntent(
-                title = textToUse.ifBlank { _uiState.value.title.ifBlank { "Task Reminder" } },
-                description = "Task in note: ${_uiState.value.title.ifBlank { "Untitled" }}",
-                startTimeMillis = timeMillis
-            )
-            try {
-                context.startActivity(calIntent)
-            } catch (_: Exception) {}
-        }
-    }
-
-    fun addChecklistItemWithReminder(
-        itemText: String,
-        timeMillis: Long,
-        isCalendar: Boolean,
-        context: Context? = null
-    ) {
-        val tag = InlineReminderParser.createReminderTag(timeMillis)
-        val line = "- [ ] ${itemText.trim()} $tag"
-        val current = _uiState.value.content
-        val updated = if (current.isBlank()) {
-            line
-        } else {
-            val lines = current.lines().toMutableList()
-            val lastCheckIndex = lines.indexOfLast { it.trim().startsWith("- [") }
-            if (lastCheckIndex >= 0) {
-                lines.add(lastCheckIndex + 1, line)
-                lines.joinToString("\n")
-            } else {
-                "$current\n$line"
-            }
-        }
-        updateContent(updated)
-
-        reminderManager.scheduleReminder(
-            noteId = _uiState.value.noteId,
-            reminderId = timeMillis.hashCode(),
-            title = itemText.ifBlank { "Task Reminder" },
-            contentSnippet = "Note: ${_uiState.value.title.ifBlank { "Untitled" }}",
-            triggerAtMillis = timeMillis
-        )
-
-        if (isCalendar && context != null) {
-            val calIntent = ReminderManager.createCalendarIntent(
-                title = itemText.ifBlank { "Task Reminder" },
-                description = "Task in note: ${_uiState.value.title.ifBlank { "Untitled" }}",
-                startTimeMillis = timeMillis
-            )
-            try {
-                context.startActivity(calIntent)
-            } catch (_: Exception) {}
-        }
-    }
-
-    fun insertInlineReminderText(
-        reminderText: String,
-        timeMillis: Long,
-        isCalendar: Boolean,
-        context: Context? = null
-    ) {
-        val currentContent = _uiState.value.content
-        val tag = InlineReminderParser.createReminderTag(timeMillis)
-        val newEntry = "${reminderText.trim()} $tag"
-        val updatedContent = if (currentContent.isBlank()) {
-            newEntry
-        } else {
-            "${currentContent.trimEnd()}\n$newEntry"
-        }
-        updateContent(updatedContent)
-
-        reminderManager.scheduleReminder(
-            noteId = _uiState.value.noteId,
-            reminderId = timeMillis.hashCode(),
-            title = reminderText.ifBlank { _uiState.value.title.ifBlank { "Reminder" } },
-            contentSnippet = "Note: ${_uiState.value.title.ifBlank { "Untitled" }}",
-            triggerAtMillis = timeMillis
-        )
-
-        if (isCalendar && context != null) {
-            val calIntent = ReminderManager.createCalendarIntent(
-                title = reminderText.ifBlank { _uiState.value.title.ifBlank { "Reminder" } },
-                description = "Note: ${_uiState.value.title.ifBlank { "Untitled" }}",
-                startTimeMillis = timeMillis
-            )
-            try {
-                context.startActivity(calIntent)
-            } catch (_: Exception) {}
-        }
-    }
-
-    fun scheduleStandaloneReminder(
-        title: String,
-        timeMillis: Long,
-        isCalendar: Boolean,
-        context: Context? = null
-    ) {
-        reminderManager.scheduleReminder(
-            noteId = _uiState.value.noteId,
-            reminderId = timeMillis.hashCode(),
-            title = title.ifBlank { _uiState.value.title.ifBlank { "Reminder" } },
-            contentSnippet = "Note: ${_uiState.value.title.ifBlank { "Untitled" }}",
-            triggerAtMillis = timeMillis
-        )
-
-        if (isCalendar && context != null) {
-            val calIntent = ReminderManager.createCalendarIntent(
-                title = title.ifBlank { _uiState.value.title.ifBlank { "Reminder" } },
-                description = "Note: ${_uiState.value.title.ifBlank { "Untitled" }}",
-                startTimeMillis = timeMillis
-            )
-            try {
-                context.startActivity(calIntent)
-            } catch (_: Exception) {}
-        }
-    }
-
-    fun removeInlineReminder(lineText: String, timeMillis: Long) {
-        val currentContent = _uiState.value.content
-        val cleanedLine = InlineReminderParser.removeReminderFromLine(lineText, timeMillis)
-        val updatedContent = currentContent.replace(lineText, cleanedLine)
-        updateContent(updatedContent)
-        reminderManager.cancelReminder(timeMillis.hashCode())
-    }
-
-    fun insertReminderAtEnd(timeMillis: Long, isCalendar: Boolean, context: Context? = null) {
-        val currentContent = _uiState.value.content
-        val tag = InlineReminderParser.createReminderTag(timeMillis)
-        val updatedContent = if (currentContent.isBlank()) tag else "$currentContent $tag"
-        updateContent(updatedContent)
-
-        reminderManager.scheduleReminder(
-            noteId = _uiState.value.noteId,
-            reminderId = timeMillis.hashCode(),
-            title = _uiState.value.title.ifBlank { "Note Reminder" },
-            contentSnippet = currentContent.take(150),
-            triggerAtMillis = timeMillis
-        )
-
-        if (isCalendar && context != null) {
-            val calIntent = ReminderManager.createCalendarIntent(
-                title = _uiState.value.title.ifBlank { "Note Reminder" },
-                description = currentContent,
-                startTimeMillis = timeMillis
-            )
-            try {
-                context.startActivity(calIntent)
-            } catch (_: Exception) {}
-        }
-    }
-
     fun toggleRawMarkdownMode() {
         _uiState.value = _uiState.value.copy(
             isRawMarkdownMode = !_uiState.value.isRawMarkdownMode
@@ -647,86 +456,115 @@ class NoteEditorViewModel(
         updateBlocksInternal(currentBlocks)
     }
 
-    fun toggleChecklistItem(line: String) {
-        val block = _uiState.value.blocks.find {
-            it is EditorBlock.Checklist && line.contains(it.text)
-        }
-        if (block != null) {
-            toggleChecklistBlock(block.id)
-        } else {
-            val currentContent = _uiState.value.content
-            val isChecked = line.contains("- [x]", ignoreCase = true)
-            val afterCheck = line.replaceFirst(Regex("""^-\s*\[[ xX]\]\s*"""), "")
-            val replacement = if (isChecked) "- [ ] $afterCheck" else "- [x] $afterCheck"
-            val updated = currentContent.replace(line, replacement)
-            updateContent(updated)
-        }
-    }
+    fun toggleOrAddBulletItem(currentBlockId: String? = null, cursorOffset: Int = 0): Pair<String, Int> {
+        val currentBlocks = _uiState.value.blocks.toMutableList()
+        val bulletPrefix = "• "
 
-    fun addChecklistItem(itemText: String = "") {
-        val newId = addChecklistItemAtCursor(null, 0)
-        if (itemText.isNotBlank()) {
-            updateChecklistText(newId, itemText)
+        if (currentBlocks.isEmpty()) {
+            val newId = java.util.UUID.randomUUID().toString()
+            val newBlock = EditorBlock.Text(id = newId, text = bulletPrefix)
+            currentBlocks.add(newBlock)
+            updateBlocksInternal(currentBlocks)
+            return Pair(newId, bulletPrefix.length)
         }
-    }
 
-    fun updateChecklistItem(oldLine: String, newText: String) {
-        val block = _uiState.value.blocks.find {
-            it is EditorBlock.Checklist && (oldLine.contains(it.text) || it.text.isEmpty())
-        }
-        if (block != null) {
-            updateChecklistText(block.id, newText)
+        val targetIndex = if (currentBlockId != null) {
+            currentBlocks.indexOfFirst { it.id == currentBlockId }
         } else {
-            val currentContent = _uiState.value.content
-            if (!currentContent.contains(oldLine)) return
-            val isChecked = oldLine.contains("- [x]", ignoreCase = true)
-            val reminder = InlineReminderParser.extractFirstReminder(oldLine)
-            val checkPrefix = if (isChecked) "- [x] " else "- [ ] "
-            val reminderSuffix = if (reminder != null) " ${reminder.rawTag}" else ""
-            val newLine = checkPrefix + newText + reminderSuffix
-            val updated = currentContent.replace(oldLine, newLine)
-            updateContent(updated)
+            currentBlocks.indexOfLast { it is EditorBlock.Text }
         }
-    }
 
-    fun deleteChecklistItem(line: String) {
-        val block = _uiState.value.blocks.find {
-            it is EditorBlock.Checklist && line.contains(it.text)
+        if (targetIndex == -1) {
+            val newId = java.util.UUID.randomUUID().toString()
+            val newBlock = EditorBlock.Text(id = newId, text = bulletPrefix)
+            currentBlocks.add(newBlock)
+            updateBlocksInternal(currentBlocks)
+            return Pair(newId, bulletPrefix.length)
         }
-        if (block != null) {
-            deleteBlock(block.id)
-        } else {
-            val currentContent = _uiState.value.content
-            val reminder = InlineReminderParser.extractFirstReminder(line)
-            if (reminder != null) {
-                reminderManager.cancelReminder(reminder.timestampMillis.hashCode())
+
+        val targetBlock = currentBlocks[targetIndex]
+        when (targetBlock) {
+            is EditorBlock.Checklist -> {
+                val cleanText = targetBlock.text
+                val bulletText = if (cleanText.startsWith("• ") || cleanText.startsWith("- ") || cleanText.startsWith("* ")) {
+                    cleanText
+                } else {
+                    "$bulletPrefix$cleanText"
+                }
+                val newBlock = EditorBlock.Text(id = targetBlock.id, text = bulletText)
+                currentBlocks[targetIndex] = newBlock
+                updateBlocksInternal(currentBlocks)
+                return Pair(newBlock.id, bulletText.length)
             }
-            val lines = currentContent.lines().toMutableList()
-            val index = lines.indexOf(line)
-            if (index >= 0) {
-                lines.removeAt(index)
-                val updated = lines.joinToString("\n")
-                updateContent(updated)
+            is EditorBlock.Text -> {
+                val text = targetBlock.text
+                if (text.isEmpty()) {
+                    val newBlock = EditorBlock.Text(id = targetBlock.id, text = bulletPrefix)
+                    currentBlocks[targetIndex] = newBlock
+                    updateBlocksInternal(currentBlocks)
+                    return Pair(newBlock.id, bulletPrefix.length)
+                }
+
+                val safeOffset = cursorOffset.coerceIn(0, text.length)
+                val lineStart = if (safeOffset == 0) 0 else {
+                    val idx = text.lastIndexOf('\n', safeOffset - 1)
+                    if (idx == -1) 0 else idx + 1
+                }
+                val lineEnd = text.indexOf('\n', safeOffset).let {
+                    if (it == -1) text.length else it
+                }
+                val currentLine = text.substring(lineStart, lineEnd)
+
+                val bulletRegex = Regex("""^(\s*(?:•|-|\*)\s*)""")
+                val match = bulletRegex.find(currentLine)
+
+                val (newLine, cursorDelta) = if (match != null) {
+                    val stripped = currentLine.substring(match.value.length)
+                    Pair(stripped, -match.value.length)
+                } else {
+                    val withBullet = if (currentLine.isBlank()) bulletPrefix else "$bulletPrefix$currentLine"
+                    Pair(withBullet, bulletPrefix.length)
+                }
+
+                val updatedText = text.substring(0, lineStart) + newLine + text.substring(lineEnd)
+                val newCursor = (safeOffset + cursorDelta).coerceIn(0, updatedText.length)
+
+                currentBlocks[targetIndex] = EditorBlock.Text(id = targetBlock.id, text = updatedText)
+                updateBlocksInternal(currentBlocks)
+                return Pair(targetBlock.id, newCursor)
             }
         }
     }
 
-    fun addBulletItem(itemText: String, blockHeader: String? = null) {
-        if (itemText.isBlank()) return
-        val currentContent = _uiState.value.content
-        val newLine = "• $itemText"
-
-        val updated = if (blockHeader != null && currentContent.contains(blockHeader)) {
-            val headerIndex = currentContent.indexOf(blockHeader)
-            val nextLineIndex = currentContent.indexOf("\n", headerIndex).let {
-                if (it == -1) currentContent.length else it
-            }
-            currentContent.substring(0, nextLineIndex) + "\n" + newLine + currentContent.substring(nextLineIndex)
-        } else {
-            currentContent.trimEnd() + "\n" + newLine
+    fun toggleOrAddBulletInRaw(rawContent: String, cursorOffset: Int = 0): Pair<String, Int> {
+        val bulletPrefix = "• "
+        val safeOffset = cursorOffset.coerceIn(0, rawContent.length)
+        val lineStart = if (safeOffset == 0) 0 else {
+            val idx = rawContent.lastIndexOf('\n', safeOffset - 1)
+            if (idx == -1) 0 else idx + 1
         }
+        val lineEnd = rawContent.indexOf('\n', safeOffset).let {
+            if (it == -1) rawContent.length else it
+        }
+        val currentLine = rawContent.substring(lineStart, lineEnd)
+
+        val bulletRegex = Regex("""^(\s*(?:•|-|\*)\s*)""")
+        val match = bulletRegex.find(currentLine)
+
+        val (newLine, cursorDelta) = if (match != null) {
+            val stripped = currentLine.substring(match.value.length)
+            Pair(stripped, -match.value.length)
+        } else {
+            val withBullet = if (currentLine.isBlank()) bulletPrefix else "$bulletPrefix$currentLine"
+            Pair(withBullet, bulletPrefix.length)
+        }
+
+        val updated = rawContent.substring(0, lineStart) + newLine + rawContent.substring(lineEnd)
+        val newCursor = (safeOffset + cursorDelta).coerceIn(0, updated.length)
         updateContent(updated)
+        return Pair(updated, newCursor)
     }
+
 
     fun insertExtractedText(text: String, targetBlockId: String? = null) {
         if (text.isBlank()) return
@@ -856,12 +694,6 @@ class NoteEditorViewModel(
         }
     }
 
-    fun archiveNote(onDone: () -> Unit) {
-        viewModelScope.launch {
-            noteRepository.toggleArchive(_uiState.value.noteId)
-            onDone()
-        }
-    }
 
     fun deleteNote(onDone: () -> Unit) {
         viewModelScope.launch {

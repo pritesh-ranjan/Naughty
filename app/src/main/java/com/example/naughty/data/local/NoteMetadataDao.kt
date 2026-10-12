@@ -14,23 +14,14 @@ interface NoteMetadataDao {
     @Query("SELECT * FROM note_metadata WHERE isArchived = 0 AND isDeleted = 0 ORDER BY isPinned DESC, modifiedAt DESC")
     fun getAllActive(): Flow<List<NoteMetadata>>
 
-    @Query("SELECT * FROM note_metadata WHERE isArchived = 1 AND isDeleted = 0 ORDER BY modifiedAt DESC")
-    fun getAllArchived(): Flow<List<NoteMetadata>>
-
     @Query("SELECT * FROM note_metadata WHERE isDeleted = 1 ORDER BY modifiedAt DESC")
     fun getAllDeleted(): Flow<List<NoteMetadata>>
 
     @Query("SELECT * FROM note_metadata WHERE isDeleted = 1 ORDER BY modifiedAt DESC")
     suspend fun getAllDeletedDirect(): List<NoteMetadata>
 
-    @Query("SELECT * FROM note_metadata WHERE isArchived = 1 AND isDeleted = 0 ORDER BY modifiedAt DESC")
-    suspend fun getAllArchivedDirect(): List<NoteMetadata>
-
     @Query("SELECT COUNT(*) FROM note_metadata WHERE isArchived = 0 AND isDeleted = 0")
     fun countActive(): Flow<Int>
-
-    @Query("SELECT COUNT(*) FROM note_metadata WHERE isArchived = 1 AND isDeleted = 0")
-    fun countArchived(): Flow<Int>
 
     @Query("SELECT COUNT(*) FROM note_metadata WHERE isDeleted = 1")
     fun countDeleted(): Flow<Int>
@@ -52,9 +43,6 @@ interface NoteMetadataDao {
 
     @Query("DELETE FROM note_metadata WHERE isDeleted = 1")
     suspend fun deletePermanentlyWhereDeleted()
-
-    @Query("DELETE FROM note_metadata WHERE isArchived = 1")
-    suspend fun deletePermanentlyWhereArchived()
 
     @Query("DELETE FROM note_metadata")
     suspend fun deleteAll()

@@ -18,18 +18,15 @@ data class NoteWithContent(
 
 class NoteRepository(
     private val dao: NoteMetadataDao,
-    private val fileManager: MarkdownFileManager
+    private val fileManager: MarkdownFileManager,
+    private val bindingDao: com.example.naughty.data.local.AppBindingDao? = null
 ) {
 
     fun getAllActive(): Flow<List<NoteMetadata>> = dao.getAllActive()
 
-    fun getAllArchived(): Flow<List<NoteMetadata>> = dao.getAllArchived()
-
     fun getAllDeleted(): Flow<List<NoteMetadata>> = dao.getAllDeleted()
 
     fun countActive(): Flow<Int> = dao.countActive()
-
-    fun countArchived(): Flow<Int> = dao.countArchived()
 
     fun countDeleted(): Flow<Int> = dao.countDeleted()
 
@@ -129,25 +126,11 @@ class NoteRepository(
         dao.updateLockStatus(id, isLocked)
     }
 
-    suspend fun toggleArchive(id: String) {
-        val existing = dao.getById(id) ?: return
-        dao.update(existing.copy(isArchived = !existing.isArchived, modifiedAt = System.currentTimeMillis()))
-    }
-
-    suspend fun unarchiveNote(id: String) {
-        val existing = dao.getById(id) ?: return
-        dao.update(existing.copy(isArchived = false, modifiedAt = System.currentTimeMillis()))
-    }
-
-    suspend fun archiveNote(id: String) {
-        val existing = dao.getById(id) ?: return
-        dao.update(existing.copy(isArchived = true, isDeleted = false, modifiedAt = System.currentTimeMillis()))
-    }
-
     suspend fun deleteNote(id: String) {
         // Soft delete note to Trash/Deleted
         val existing = dao.getById(id) ?: return
-        dao.update(existing.copy(isDeleted = true, modifiedAt = System.currentTimeMillis()))
+        dao.update(existing.copy(isDeleted = true, isArchived = false, modifiedAt = System.currentTimeMillis()))
+        bindingDao?.deleteByNoteId(id)
     }
 
     suspend fun restoreNote(id: String) {
@@ -157,6 +140,7 @@ class NoteRepository(
 
     suspend fun permanentlyDeleteNote(id: String) {
         val existing = dao.getById(id) ?: return
+        bindingDao?.deleteByNoteId(id)
         fileManager.deleteNote(existing.fileName)
         dao.delete(existing)
     }
@@ -167,14 +151,6 @@ class NoteRepository(
             fileManager.deleteNote(item.fileName)
         }
         dao.deletePermanentlyWhereDeleted()
-    }
-
-    suspend fun permanentlyDeleteAllArchived() {
-        val archived = dao.getAllArchivedDirect()
-        for (item in archived) {
-            fileManager.deleteNote(item.fileName)
-        }
-        dao.deletePermanentlyWhereArchived()
     }
 
     suspend fun deleteAllNotes() {

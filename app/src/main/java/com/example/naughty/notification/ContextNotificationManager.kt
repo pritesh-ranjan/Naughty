@@ -15,6 +15,7 @@ import com.example.naughty.data.repository.NoteRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.getValue
 
 class ContextNotificationManager(
     private val context: Context,
@@ -56,8 +57,9 @@ class ContextNotificationManager(
 
     private suspend fun showContextNotification(event: BindingEvent) {
         if (event.noteId.isBlank()) return
-        val noteContent = noteRepository.getNoteContent(event.noteId)
         val note = noteRepository.getNote(event.noteId) ?: return
+        if (note.metadata.isDeleted) return
+        val noteContent = note.content
 
         // Strip markdown formatting for notification preview
         val preview = noteContent

@@ -11,6 +11,7 @@ import android.provider.CalendarContract
 import androidx.core.app.NotificationCompat
 import com.example.naughty.MainActivity
 import com.example.naughty.R
+import androidx.compose.runtime.getValue
 
 class ReminderManager(private val context: Context) {
 

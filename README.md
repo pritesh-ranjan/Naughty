@@ -2,36 +2,38 @@
 
 # 📓 NAUGHTY
 
-### *The Context-Aware, Local-First Markdown Workspace & Timeline Engine for Android.*
+### *The Context-Aware, Offline-First Markdown Workspace & Timeline Engine for Android.*
 
 [![CI Build](https://img.shields.io/github/actions/workflow/status/pritesh-ranjan/Naughty/build.yml?branch=main&style=flat-square&logo=githubactions&logoColor=white&label=CI%20Build)](https://github.com/pritesh-ranjan/Naughty/actions)
 [![Latest Release](https://img.shields.io/github/v/release/pritesh-ranjan/Naughty?style=flat-square&logo=github&color=3B82F6&label=Release)](https://github.com/pritesh-ranjan/Naughty/releases/latest)
 [![Total Downloads](https://img.shields.io/github/downloads/pritesh-ranjan/Naughty/total?style=flat-square&logo=android&color=10B981&label=Downloads)](https://github.com/pritesh-ranjan/Naughty/releases)
+[![Target SDK](https://img.shields.io/badge/Target%20SDK-36%20(Android%2016)-34D399?style=flat-square&logo=android&logoColor=white)](app/build.gradle.kts)
 [![100% Offline](https://img.shields.io/badge/Privacy-100%25%20Offline%20(No%20Internet)-059669?style=flat-square)](PRIVACY.md)
 [![Hardware Biometrics](https://img.shields.io/badge/Security-Hardware%20Biometrics-D97706?style=flat-square)](SECURITY.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-F59E0B.svg?style=flat-square)](LICENSE)
 
 <br/>
 
-> **Most note apps trap your thoughts inside a silo.**  
-> **Naughty surfaces them dynamically the exact moment and place you need them.**
+> **Naughty connects your notes to your actions.**  
+> Built strictly offline-first, Naughty surfaces relevant notes, checklists, and references as non-intrusive heads-up cards the moment you open designated applications—eliminating app-switching and search friction. Every note is saved as a physical Markdown (`.md`) file on device storage for absolute privacy and complete data ownership.
 
 <br/>
 
 <p align="center">
-  <img src="docs/screenshots/dashboard_dark.png" width="23%" alt="Notes Dashboard" />
-  <img src="docs/screenshots/editor_dark.png" width="23%" alt="Markdown Editor" />
-  <img src="docs/screenshots/app_binding.png" width="23%" alt="App Binding" />
-  <img src="docs/screenshots/timeline_tracker.png" width="23%" alt="Timeline Tasks" />
+  <img src="docs/screenshots/dashboard_dark.png" width="19%" alt="Notes Dashboard" />
+  <img src="docs/screenshots/editor_dark.png" width="19%" alt="Block Markdown Editor" />
+  <img src="docs/screenshots/app_binding.png" width="19%" alt="Context App Binding" />
+  <img src="docs/screenshots/timeline_tracker.png" width="19%" alt="Timeline Tasks" />
+  <img src="docs/screenshots/theme_picker.png" width="19%" alt="Theme Engine" />
 </p>
 
 <br/>
 
-[Why Naughty?](#-why-naughty) •
-[Features](#-features) •
-[Themes](#-handcrafted-themes) •
+[Core Capabilities](#-core-capabilities) •
+[Technology Stack](#-technology-stack) •
+[Themes & Canvas](#-handcrafted-themes) •
 [Privacy & Security](#-privacy--security) •
-[Download](#-download--install) •
+[Download & Build](#-download--build) •
 [License](#-license)
 
 ---
@@ -40,134 +42,144 @@
 
 <br/>
 
-## 💡 Why Naughty?
+## ⚡ Core Capabilities
 
-Have you ever made a shopping list, only to forget checking it when you arrived at the store and opened your grocery app? Or jotted down meeting notes, only to scramble looking for them when opening Zoom or Slack?
+### 🧠 Context-Aware App Binding
+* **Autonomous Surfacing**: Link any note or checklist to specific third-party applications (e.g., view shopping lists inside delivery apps, or meeting agendas inside Zoom).
+* **Flexible Trigger Rules**: Set bindings to surface **every time**, **once** (auto-dismissing after use), or until a **custom expiry date**.
+* **Zero Disruption**: Displays as a lightweight heads-up card that automatically recedes when switching away from the bound application.
 
-**Naughty connects your notes to your actions.**
+### 🗺️ Multi-Step Timeline Engine
+* **High-Stakes Workflow Tracking**: Manage complex multi-stage efforts (visa applications, home purchases, product launches) via ordered milestones.
+* **Deterministic Progress**: Computes completion mathematically (`done / (total - cancelled)`), accurately excluding cancelled milestones.
+* **Audit Trail**: Immutable-style activity log captures status transitions, updates, and timestamped progress notes.
+* **Milestone Alarms**: Schedule exact notifications tied directly to milestone deadlines.
 
-Instead of passively storing notes in a silo, Naughty uses lightweight on-device detection to surface relevant notes and checklists as heads-up cards the instant you open designated apps. 
+### 📝 Hybrid Markdown Editor
+* **Dual Editing Surface**: Fluidly switch between tactile block editing (interactive checkboxes, headings, text) and raw full-text Markdown.
+* **Smart Indentation**: Auto-continuation of checklists and bullet points; pressing Enter on an empty checklist item exits cleanly to standard text.
+* **Snapshot Undo / Redo**: Instant, in-memory state preservation supporting up to 30 history states.
+* **Inline Reminders**: Embed date and time reminders natively inside Markdown text (`[🔔 Label](reminder:<timestamp>)`).
+* **Visual Attachments & OCR**: Attach images directly and transcribe printed or handwritten text on-device using integrated OCR.
 
-Every note lives as a standard, physical `.md` (Markdown) file on your phone. No cloud accounts, no subscriptions, no tracking—just pure utility and total privacy.
+### 🎙️ Neural Voice Notes & Direct Opus Streaming
+* **Real-Time Neural Denoising**: On-device AI suppression (Audx RNNoise) eliminates background noise, wind, and hum during capture.
+* **Mid-Recording Denoise Toggle**: Switch between neural noise suppression and raw microphone audio on the fly without stopping the stream.
+* **Zero WAV Overhead**: Raw 48 kHz PCM frames encode directly into an Opus/Ogg stream via native `MediaCodec`, saving storage and eliminating intermediate WAV files.
+* **Interactive Waveform Player**: WhatsApp-style scrubber with tap-and-drag seeking, duration indicators, and 1x / 1.5x / 2x speed stepping.
+* **Offline Dictation**: On-device speech recognition transcribes audio directly into notes without external network calls.
+
+### 🔒 Hardware-Backed Biometric Security
+* **Biometric Authentication**: Secure confidential notes using fingerprint, facial recognition, or device PIN/pattern fallback via `BiometricPrompt`.
+* **Zero Preview Leakage**: Locked notes obscure body text across dashboard cards, search results, and notifications until explicitly authenticated.
+* **Session Isolation**: Authentication remains valid only during active app lifecycle and resets upon app dismissal.
+
+### 📥 Universal Ingestion & OS Integration
+* **System Share Ingestion**: Create structured notes directly from text, links, single/batch images, or audio shared from any Android app.
+* **System Context Menu**: Highlight text in any application and select "Add to Naughty" to capture thoughts immediately.
+* **Launcher Shortcuts**: Long-press app launcher icon for quick actions to create a new note or open timeline trackers.
+* **Reboot-Resilient Exact Alarms**: Exact alarms schedule through Android's `AlarmManager` with `BOOT_COMPLETED` rescheduling.
 
 ---
 
-## ⚡ Features
+## 🛠️ Technology Stack
 
-### 🧠 Context-Aware App Binding
-* **Automatic Surfacing**: Bind any note to one or more apps (e.g. show your grocery checklist inside your delivery app, or meeting agenda inside Zoom).
-* **Flexible Triggers**: Set bindings to appear **every time**, **just once** (auto-dismissing after first use), or until a **custom expiry date**.
-* **Non-Intrusive**: Surfaces as a clean heads-up card that automatically dismisses when you leave the app.
+Naughty is engineered with modern Android architecture guidelines, leveraging an offline-first dual-storage pattern and hardware-accelerated processing:
 
-### 🗺️ Timeline Tasks & Workflows
-* **Multi-Step Tracking**: Track high-stakes, multi-week efforts (visa applications, home purchases, product launches) through structured milestones.
-* **Smart Progress**: Automatic progress calculation (`done / (total - cancelled)`) that accurately excludes cancelled steps.
-* **Audit History**: Built-in activity log tracks state changes and progress notes over time.
-* **Milestone Deadlines**: Schedule exact alarms tied to milestone due dates.
-
-### 🎙️ AI Voice Notes & Waveform Player
-* **Neural Noise Suppression**: On-device AI filters background noise, wind, and hum for studio-clear recordings.
-* **Live AI Denoise Toggle**: Switch noise reduction on/off mid-recording with a single tap.
-* **WhatsApp-Style Playback**: Smooth, interactive waveform scrubber with tap/drag seeking and 1x / 1.5x / 2x speed controls.
-* **Offline Dictation**: Transcribe voice notes to text 100% on-device and insert them into your notes in one click.
-
-### 📝 Hybrid Markdown Editor
-* **Dual Editing Modes**: Seamlessly switch between tactile block editing (interactive checkboxes, headers, text) and raw Markdown with live preview.
-* **Smart Checklists**: Pressing Enter on an empty checklist item automatically converts back to standard text.
-* **Time Travel**: Instant snapshot-based undo and redo up to 30 states.
-* **Inline Reminders**: Embed date and time reminders directly into task markdown (`[🔔 Label](reminder:...)`).
-
-### 📥 Universal Quick Capture
-* **System Share Ingestion**: Share text, links, or images to Naughty directly from any app.
-* **"Add to Naughty" Context Menu**: Highlight text anywhere on your device and save it in one tap.
-* **Interactive Image Capture**: Choose to attach shared images, extract text using on-device OCR, or do both.
-* **Instant Clipboard OCR**: Dedicated share shortcut to extract text from images straight to your clipboard.
-* **Home Screen Shortcuts**: Long-press the app icon for quick actions to create a note or start a timeline task.
-
-### 🔒 Hardware-Backed Biometric Vault
-* **Biometric Lock**: Secure sensitive notes with fingerprint, face unlock, or device PIN.
-* **Zero Preview Leakage**: Locked notes are completely masked across cards, search results, and notifications until authenticated.
-* **Session Security**: Notes remain unlocked during your active session and auto-lock upon exiting.
-
-### ⏰ Reliable Alarms & Calendar Sync
-* **Exact Alarms**: Accurate alerts scheduled with Android's exact alarm system that fire on time even during deep battery sleep.
-* **Reboot Resilient**: Alarms automatically reschedule when your phone restarts.
-* **Calendar Integration**: Export note reminders directly to Google Calendar or your default calendar app.
-
-### 🔍 Fast Search & Workspace Organization
-* **Sub-Millisecond Search**: Instantly query titles, note content, and bound app names.
-* **Quick-Jot Dock**: Capture fleeting thoughts in seconds from the persistent bottom dock.
-* **Swipe Actions**: Swipe left to Archive, swipe right to send to Trash.
-* **Trash Recovery**: Restore mistakenly deleted notes or wipe them permanently from the recovery drawer.
-
-### 📂 Zero Data Lock-In
-* **Standard Markdown**: Every note body is saved as a real `.md` file in local storage.
-* **Universal Portability**: View, edit, or copy your files in Obsidian, Logseq, VS Code, or any text editor anytime.
+| Layer | Architecture & Libraries | Description |
+| :--- | :--- | :--- |
+| **Language & Toolchain** | Kotlin 2.3.20 • JVM Target 17 • AGP 9.0.1 | 100% Kotlin codebase built with modern Gradle toolchains |
+| **UI Framework** | Jetpack Compose • Material 3 • Navigation 3 | Declarative UI, edge-to-edge rendering, and adaptive layouts |
+| **Architecture** | Unidirectional Data Flow (UDF) • Coroutines • StateFlow | Reactive state management with lightweight manual dependency injection |
+| **Storage Engine** | Hybrid Dual-Storage: Room (SQLite) + Physical Markdown | Room indexes metadata and queries; ground truth lives as UTF-8 `.md` files on disk |
+| **On-Device AI & ML** | Audx RNNoise • Google ML Kit • Android SpeechRecognizer | Neural audio denoising, Latin text OCR, and speech dictation executed 100% locally |
+| **Audio Processing** | AudioRecord (48 kHz PCM) • MediaCodec • MediaMuxer | Real-time audio capture, low-latency streaming, and native Opus compression |
+| **Security & Privacy** | AndroidX Biometric • Hardware Keystore / TEE | Biometric authentication backed by Android StrongBox / TEE hardware credentials |
+| **Platform Target** | Android 7.0 (API 24) to Android 16 (API 36) | Target SDK 36 with backward compatibility down to Android 7.0 |
 
 ---
 
 ## 🎨 Handcrafted Themes
 
-Choose from 14 curated color palettes with canvas-rendered notebook paper textures (Blueprint Grid, Dot Grid, Ruled Lines, and Clean Canvas):
+Customize your workspace with 14 curated color palettes paired with procedural paper textures rendered directly on Compose Canvas:
 
-| Theme | Style | Palette Vibe |
+| Theme | Tone | Palette Vibe |
 | :--- | :--- | :--- |
-| **Mononoke** | Dark | Emerald Monospace & Charcoal |
-| **Gundam** | Light | Blueprint Grid & Royal Cobalt |
-| **Tokyo Drift** | Dark | Cyberpunk Neon Cyan & Magenta |
-| **Vendetta** | Dark | Typewriter Noir & Crimson |
-| **Piccolo** | Light | Mint Paper & Royal Violet |
-| **A24** | Dark | Indie Cinema Slate & Amber Warmth |
+| **Mononoke** | Dark | Emerald Monospace & Deep Charcoal |
+| **Gundam** | Light | Technical Blueprint Grid & Royal Cobalt |
+| **Tokyo Drift** | Dark | Cyberpunk Neon Cyan & Electric Magenta |
+| **Vendetta** | Dark | Typewriter Noir & Crimson Accent |
+| **Piccolo** | Light | Anime Mint Paper & Royal Violet |
+| **A24** | Dark | Indie Cinema Slate & Warm Amber |
 | **Brave** | Light | Editorial Serif & Burnt Terracotta |
-| **Agrabah** | Dark | Arabian Night Violet & Gold |
+| **Agrabah** | Dark | Arabian Night Violet & Desert Gold |
 | **Dracula** | Dark | Classic Dracula Slate, Pink & Mint |
 | **Nord** | Dark | Arctic Frost Steel & Glacier Cyan |
-| **Gruvbox** | Dark | Retro Warm Groove & Ochre |
-| **Solarized** | Light | Terminal Parchment & Cyan |
-| **Dot Matrix** | Dark | 80s CRT Phosphor Green |
-| **Flexoki** | Light | Minimal Inky Paper & Forest Pine |
+| **Gruvbox** | Dark | Retro Warm Groove & Ochre Earth |
+| **Solarized** | Light | Terminal Parchment & Solar Cyan |
+| **Dot Matrix** | Dark | 80s CRT Phosphor Green Glow |
+| **Flexoki** | Light | Inky Warm Paper & Forest Pine |
 
-*Supports Light, Dark, and System Auto mode.*
+*Includes Light, Dark, and System Auto mode support with Canvas-rendered Blueprint Grid, Dot Grid, Ruled Lines, and Clean Canvas paper textures.*
 
 ---
 
 ## 🛡️ Privacy & Security
 
-Naughty is built on an uncompromising privacy foundation:
+Naughty operates under strict privacy invariants:
 
-* **100% Offline**: Zero internet permissions declared in the app manifest. Naughty physically cannot connect to any remote server or cloud.
-* **Zero Surveillance**: No analytics, telemetry, user tracking, or advertising SDKs.
-* **On-Device Intelligence**: Voice denoising, speech-to-text, and image OCR run exclusively on your phone's processor.
-* **No Cloud Leakage**: Automated cloud backups are disabled to prevent unencrypted cloud syncing of private notes.
-* **Transparent Storage**: Your notes are stored as plain Markdown (`.md`) files on your device that you own completely.
+* **100% Offline by Design**: `android.permission.INTERNET` is explicitly stripped from the application manifest. Naughty physically cannot transmit data across the internet.
+* **Zero Telemetry**: No third-party trackers, analytics, ad networks, or remote crash reporting SDKs.
+* **Local-Only Computation**: Machine learning models (OCR, neural noise suppression, voice recognition) execute entirely on-device without remote API calls.
+* **Cloud Isolation**: Automatic cloud backups are explicitly disabled (`allowBackup="false"`) to protect confidential notes from unencrypted third-party drive syncs.
+* **Open File Ground Truth**: Every note is stored as a plain Markdown (`.md`) file on device storage, fully accessible and compatible with tools like Obsidian, Logseq, and VS Code.
 
-*For full details, see our [Privacy Policy](PRIVACY.md) and [Security Policy](SECURITY.md).*
+*For complete policies, see [Privacy Policy](PRIVACY.md) and [Security Policy](SECURITY.md).*
 
 ---
 
-## 📦 Download & Install
+## 📦 Download & Build
 
-### Latest Release
+### Install Release APK
 Download the latest signed release APK from [**GitHub Releases**](https://github.com/pritesh-ranjan/Naughty/releases/latest):
-1. Download **`Naughty-v2.1.10-release.apk`**.
-2. Tap the downloaded file to install on your Android device (enable "Install Unknown Apps" if prompted).
-3. Open Naughty and enjoy your distraction-free workspace!
+1. Download the release `.apk` file.
+2. Tap the file on your device to install (enable "Install Unknown Apps" if prompted).
 
 ### Install via ADB
 ```bash
-adb install -r Naughty-v2.1.10-release.apk
+adb install -r Naughty-release.apk
+```
+
+### Build from Source
+Ensure Android Studio and JDK 17+ are installed:
+```bash
+# Clone the repository
+git clone https://github.com/pritesh-ranjan/Naughty.git
+cd Naughty
+
+# Export Java Home
+export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+
+# Run unit tests
+./gradlew testDebugUnitTest
+
+# Assemble Release APK
+./gradlew assembleRelease
+# Or use the automated release build script:
+./build_release.sh
 ```
 
 ---
 
 ## 🤝 Contributing
 
-Contributions are welcomed! Whether you want to add new color themes, refine Markdown rendering, or improve features:
+Contributions are welcomed. To propose changes, report issues, or contribute new themes and features:
 1. Fork the repository.
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`).
-3. Commit your changes (`git commit -m 'feat: Add AmazingFeature'`).
-4. Push to the branch (`git push origin feature/AmazingFeature`).
-5. Open a Pull Request.
+2. Create your feature branch (`git checkout -b feature/NewFeature`).
+3. Ensure unit tests pass (`./gradlew testDebugUnitTest`).
+4. Commit your changes (`git commit -m 'feat: Add NewFeature'`).
+5. Push to the branch (`git push origin feature/NewFeature`).
+6. Open a Pull Request.
 
 ---
 

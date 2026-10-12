@@ -11,13 +11,34 @@ class InlineReminderParserTest {
 
     @Test
     fun testParseReminders_standardToken() {
-        val line = "- [ ] Finish presentation [🔔 Tomorrow, 10:00 AM](reminder:1738291829000)"
-        val reminders = InlineReminderParser.parseReminders(line)
+        // 1738291829000L is Jan 31, 2025 10:50:29 AM GMT
+        val time = 1738291829000L
+        val line = "- [ ] Finish presentation [🔔 Tomorrow, 10:00 AM](reminder:$time)"
+        // When parsed from yesterday's perspective (time is tomorrow):
+        val oneDayBefore = time - (24 * 60 * 60 * 1000L)
+        val reminders = InlineReminderParser.parseReminders(line, nowMillis = oneDayBefore)
 
         assertEquals(1, reminders.size)
         val reminder = reminders[0]
-        assertEquals("Tomorrow, 10:00 AM", reminder.displayText)
-        assertEquals(1738291829000L, reminder.timestampMillis)
+        assertTrue(reminder.displayText.startsWith("Tomorrow,"))
+        assertEquals(time, reminder.timestampMillis)
+    }
+
+    @Test
+    fun testParseReminders_passedReminderShowsActualDate() {
+        val pastTime = 1700000000000L // Nov 14, 2023
+        val line = "- [ ] Stale task [🔔 Tomorrow, 10:00 AM](reminder:$pastTime)"
+        // Current perspective is way past the reminder
+        val now = pastTime + (7 * 24 * 60 * 60 * 1000L)
+        val reminders = InlineReminderParser.parseReminders(line, nowMillis = now)
+
+        assertEquals(1, reminders.size)
+        val reminder = reminders[0]
+        // Must NOT show "Tomorrow" or "Today" because the date has passed
+        assertFalse(reminder.displayText.startsWith("Tomorrow"))
+        assertFalse(reminder.displayText.startsWith("Today"))
+        val expectedMonthDay = java.text.SimpleDateFormat("MMM d", java.util.Locale.getDefault()).format(java.util.Date(pastTime))
+        assertTrue(reminder.displayText.contains(expectedMonthDay))
     }
 
     @Test

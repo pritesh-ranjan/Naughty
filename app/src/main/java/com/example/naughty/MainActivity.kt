@@ -11,10 +11,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.fragment.app.FragmentActivity
 import androidx.navigation3.runtime.entryProvider
@@ -32,15 +30,20 @@ import com.example.naughty.ui.navigation.TimelineDetailKey
 import com.example.naughty.ui.navigation.TimelineListKey
 import com.example.naughty.ui.notelist.NoteListScreen
 import com.example.naughty.ui.theme.NaughtyTheme
+import com.example.naughty.ui.components.ShareAudioOptionSheet
 import com.example.naughty.ui.components.ShareImageOptionSheet
 import com.example.naughty.ui.timeline.TimelineDetailScreen
 import com.example.naughty.ui.timeline.TimelineListScreen
+import com.example.naughty.util.AudioShareMode
 import com.example.naughty.util.ImageShareMode
+import com.example.naughty.util.PendingAudioShare
 import com.example.naughty.util.PendingImageShare
 import com.example.naughty.util.ShareIntentHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 class MainActivity : FragmentActivity() {
 
@@ -51,6 +54,10 @@ class MainActivity : FragmentActivity() {
     private var pendingImageShare by mutableStateOf<PendingImageShare?>(null)
     private var isProcessingImageShare by mutableStateOf(false)
     private var processingText by mutableStateOf("")
+
+    private var pendingAudioShare by mutableStateOf<PendingAudioShare?>(null)
+    private var isProcessingAudioShare by mutableStateOf(false)
+    private var audioProcessingText by mutableStateOf("")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -83,7 +90,7 @@ class MainActivity : FragmentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     PermissionGate(
-                        bypass = isBypassed || pendingNoteId != null || pendingTrackerId != null || pendingImageShare != null || pendingOpenTimeline
+                        bypass = isBypassed || pendingNoteId != null || pendingTrackerId != null || pendingImageShare != null || pendingAudioShare != null || pendingOpenTimeline
                     ) {
                         NaughtyNavigation(
                             initialNoteId = pendingNoteId,
@@ -134,6 +141,53 @@ class MainActivity : FragmentActivity() {
                                 onDismiss = {
                                     if (!isProcessingImageShare) {
                                         pendingImageShare = null
+                                    }
+                                }
+                            )
+                        }
+
+                        pendingAudioShare?.let { audioShare ->
+                            val app = applicationContext as? NaughtyApp ?: return@let
+                            val repository = app.container.noteRepository
+
+                            ShareAudioOptionSheet(
+                                audioUris = audioShare.uris,
+                                subject = audioShare.subject,
+                                text = audioShare.text,
+                                isProcessing = isProcessingAudioShare,
+                                processingText = audioProcessingText,
+                                onSelectMode = { mode ->
+                                    isProcessingAudioShare = true
+                                    audioProcessingText = when (mode) {
+                                        AudioShareMode.ATTACH_ONLY -> "Attaching voice note..."
+                                        AudioShareMode.TRANSCRIBE_ONLY -> "Transcribing speech offline..."
+                                        AudioShareMode.BOTH -> "Transcribing & attaching voice note..."
+                                    }
+                                    lifecycleScope.launch {
+                                        val createdNote = ShareIntentHandler.processAudioShare(
+                                            context = this@MainActivity,
+                                            share = audioShare,
+                                            mode = mode,
+                                            repository = repository
+                                        )
+                                        withContext(Dispatchers.Main) {
+                                            isProcessingAudioShare = false
+                                            pendingAudioShare = null
+                                            if (createdNote != null) {
+                                                val msg = when (mode) {
+                                                    AudioShareMode.TRANSCRIBE_ONLY -> "Speech transcribed offline"
+                                                    AudioShareMode.BOTH -> "Voice note & transcript saved"
+                                                    AudioShareMode.ATTACH_ONLY -> "Voice note attached"
+                                                }
+                                                Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show()
+                                                pendingNoteId = createdNote.id
+                                            }
+                                        }
+                                    }
+                                },
+                                onDismiss = {
+                                    if (!isProcessingAudioShare) {
+                                        pendingAudioShare = null
                                     }
                                 }
                             )
@@ -195,6 +249,13 @@ class MainActivity : FragmentActivity() {
             if (imageShare != null) {
                 ShareIntentHandler.markAsHandled(intent)
                 pendingImageShare = imageShare
+                return
+            }
+
+            val audioShare = ShareIntentHandler.extractAudioShare(intent)
+            if (audioShare != null) {
+                ShareIntentHandler.markAsHandled(intent)
+                pendingAudioShare = audioShare
                 return
             }
 
@@ -321,6 +382,9 @@ fun NaughtyNavigation(
                         onOpenTimeline = {
                             backStack.add(TimelineListKey)
                         },
+                        onOpenSettings = {
+                            backStack.add(com.example.naughty.ui.navigation.SettingsKey)
+                        },
                         onTriggerSearch = {
                             showUniversalSearch = true
                         }
@@ -395,6 +459,21 @@ fun NaughtyNavigation(
                             if (backStack.size > 1) {
                                 backStack.removeLastOrNull()
                             }
+                        }
+                    )
+                }
+
+                entry<com.example.naughty.ui.navigation.SettingsKey> {
+                    val viewModel = remember { container.settingsViewModel() }
+                    com.example.naughty.ui.settings.SettingsScreen(
+                        viewModel = viewModel,
+                        onBack = {
+                            if (backStack.size > 1) {
+                                backStack.removeLastOrNull()
+                            }
+                        },
+                        onNoteClick = { targetNoteId ->
+                            backStack.add(NoteEditorKey(targetNoteId))
                         }
                     )
                 }

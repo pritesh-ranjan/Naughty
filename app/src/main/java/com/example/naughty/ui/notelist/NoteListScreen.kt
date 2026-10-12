@@ -3,7 +3,6 @@ package com.example.naughty.ui.notelist
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,11 +34,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.CheckBox
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.LockOpen
-import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material3.ModalBottomSheet
@@ -47,6 +44,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.TextButton
 import androidx.compose.foundation.layout.navigationBarsPadding
 import com.example.naughty.util.BiometricAuthHelper
@@ -54,30 +52,16 @@ import com.example.naughty.util.BiometricStatus
 import com.example.naughty.util.NoteLockSession
 import com.example.naughty.util.findFragmentActivity
 import android.widget.Toast
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.Timeline
 import androidx.compose.ui.graphics.Color
 import com.example.naughty.ui.theme.AmoledBlack
 import com.example.naughty.ui.theme.CrystalWhite
 import com.example.naughty.ui.theme.ElectricAmber
-import com.example.naughty.ui.theme.ElectricCyan
 import com.example.naughty.ui.theme.ElectricGreen
 import com.example.naughty.ui.theme.ElectricPink
-import com.example.naughty.ui.theme.StealthDockBackground
-import com.example.naughty.ui.theme.StealthDockBorder
-import com.example.naughty.ui.theme.StealthFabBlack
-import com.example.naughty.ui.theme.StealthFabWhite
-import com.example.naughty.ui.theme.StealthIndicatorActive
-import com.example.naughty.ui.theme.StealthIndicatorInactive
-import com.example.naughty.ui.theme.StealthTextMuted
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -85,13 +69,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -104,33 +85,13 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.datastore.preferences.core.edit
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.material.icons.outlined.KeyboardArrowDown
-import androidx.compose.material.icons.outlined.Menu
-import androidx.compose.material3.DrawerValue
-import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.rememberDrawerState
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
-import androidx.compose.ui.input.nestedscroll.NestedScrollSource
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
-import com.example.naughty.ui.components.SettingsDrawerContent
+
 import com.example.naughty.ui.components.FullscreenImageViewer
-import com.example.naughty.ui.theme.BrandSubtitleStyle
 import com.example.naughty.ui.theme.BrandTitleStyle
-import com.example.naughty.ui.theme.SubtitleColorDark
-import com.example.naughty.ui.theme.SubtitleColorLight
-import com.example.naughty.ui.theme.THEME_MODE_KEY
-import com.example.naughty.ui.theme.ThemeMode
-import com.example.naughty.ui.theme.themeDataStore
-import com.example.naughty.ui.theme.themePreferenceFlow
 import com.example.naughty.ui.theme.isAppInDarkTheme
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -138,6 +99,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -145,15 +108,11 @@ fun NoteListScreen(
     viewModel: NoteListViewModel,
     onNoteClick: (String) -> Unit,
     onOpenTimeline: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
     onTriggerSearch: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val archivedNotes by viewModel.archivedNotes.collectAsStateWithLifecycle()
-    val deletedNotes by viewModel.deletedNotes.collectAsStateWithLifecycle()
-    val archivedCount by viewModel.archivedCount.collectAsStateWithLifecycle()
-    val deletedCount by viewModel.deletedCount.collectAsStateWithLifecycle()
-    val activeCount by viewModel.activeCount.collectAsStateWithLifecycle()
     val trackerCount by viewModel.trackerCount.collectAsStateWithLifecycle()
 
     val listState = rememberLazyListState()
@@ -164,13 +123,10 @@ fun NoteListScreen(
     val keyboardController = LocalSoftwareKeyboardController.current
     val searchFocusRequester = remember { FocusRequester() }
     val isDark = isAppInDarkTheme()
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     var fullscreenImageUri by remember { mutableStateOf<String?>(null) }
     var actionNote by remember { mutableStateOf<com.example.naughty.data.local.NoteMetadata?>(null) }
+    var noteToDelete by remember { mutableStateOf<com.example.naughty.data.local.NoteMetadata?>(null) }
     var showNoSecurityDialog by remember { mutableStateOf(false) }
-
-    val currentTheme by context.themePreferenceFlow().collectAsState(initial = ThemeMode.LIGHT)
-
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -197,236 +153,161 @@ fun NoteListScreen(
         }
     }
 
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        drawerContent = {
-            SettingsDrawerContent(
-                currentTheme = currentTheme,
-                notesCount = activeCount,
-                boundAppsCount = uiState.boundApps.values.flatten().distinct().size,
-                archivedCount = archivedCount,
-                deletedCount = deletedCount,
-                archivedNotes = archivedNotes,
-                deletedNotes = deletedNotes,
-                timelineCount = trackerCount,
-                onThemeSelected = { newTheme ->
-                    coroutineScope.launch {
-                        context.themeDataStore.edit { preferences ->
-                            preferences[THEME_MODE_KEY] = newTheme.name
-                        }
-                    }
-                },
-                onOpenTimeline = onOpenTimeline,
-                onNoteClick = { noteId ->
-                    onNoteClick(noteId)
-                },
-                onRestoreNote = { id -> viewModel.restoreNote(id) },
-                onUnarchiveNote = { id -> viewModel.unarchiveNote(id) },
-                onPermanentlyDeleteNote = { id -> viewModel.permanentlyDeleteNote(id) },
-                onEmptyTrash = { viewModel.emptyTrash() },
-                onPermanentlyDeleteAllArchived = { viewModel.permanentlyDeleteAllArchived() },
-                onClearAllNotes = {
-                    viewModel.clearAllNotes()
-                },
-                onCloseDrawer = {
-                    coroutineScope.launch { drawerState.close() }
-                }
-            )
-        }
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
     ) {
-        Box(
-            modifier = modifier
+        Column(
+            modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
+                .windowInsetsPadding(WindowInsets.statusBars)
         ) {
-            Column(
+            // Top Bar with Balanced Spacer, Naughty Brand Header & Settings Icon in Right Corner
+            Row(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Top Bar with Hamburger Menu & Naughty Brand Header
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(
-                        onClick = { coroutineScope.launch { drawerState.open() } },
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Menu,
-                            contentDescription = "Menu",
-                            tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f),
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
+                // Left spacer to keep center title balanced with the right settings button
+                Spacer(modifier = Modifier.size(40.dp))
 
-                    // Centered Brand Title - Swipe down or tap to open universal search
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(8.dp))
-                            .pointerInput(Unit) {
-                                var totalDragY = 0f
-                                detectVerticalDragGestures(
-                                    onDragStart = { totalDragY = 0f },
-                                    onDragEnd = {
-                                        if (totalDragY > 50f) {
+                // Centered Brand Title - Swipe down or tap to open universal search
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .pointerInput(Unit) {
+                            var totalDragY = 0f
+                            detectVerticalDragGestures(
+                                onDragStart = { totalDragY = 0f },
+                                onDragEnd = {
+                                    if (totalDragY > 50f) {
+                                        totalDragY = 0f
+                                        onTriggerSearch()
+                                    }
+                                },
+                                onDragCancel = { totalDragY = 0f },
+                                onVerticalDrag = { change, dragAmount ->
+                                    if (dragAmount > 0) {
+                                        totalDragY += dragAmount
+                                        if (totalDragY > 60f) {
+                                            change.consume()
                                             totalDragY = 0f
                                             onTriggerSearch()
                                         }
-                                    },
-                                    onDragCancel = { totalDragY = 0f },
-                                    onVerticalDrag = { change, dragAmount ->
-                                        if (dragAmount > 0) {
-                                            totalDragY += dragAmount
-                                            if (totalDragY > 60f) {
-                                                change.consume()
-                                                totalDragY = 0f
-                                                onTriggerSearch()
-                                            }
-                                        } else if (dragAmount < -10f) {
-                                            totalDragY = 0f
-                                        }
+                                    } else if (dragAmount < -10f) {
+                                        totalDragY = 0f
                                     }
-                                )
-                            }
-                            .clickable { onTriggerSearch() },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "NAUGHTY",
-                            style = BrandTitleStyle,
-                            color = MaterialTheme.colorScheme.onBackground
-                        )
-                    }
-
-                    // Spacer on right to balance the menu button and keep center title balanced
-                    Spacer(modifier = Modifier.size(40.dp))
-                }
-
-                // Timeline Tasks Horizontal Banner Ribbon
-                AnimatedVisibility(
-                    visible = trackerCount > 0,
-                    enter = expandVertically() + fadeIn(),
-                    exit = shrinkVertically() + fadeOut()
-                ) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onOpenTimeline() },
-                            color = if (isDark) Color(0xFF091419) else Color(0xFFEAF5FA)
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.Timeline,
-                                        contentDescription = null,
-                                        tint = if (isDark) ElectricCyan else Color(0xFF0083A0),
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    Text(
-                                        text = "$trackerCount ${if (trackerCount == 1) "timeline task" else "timeline tasks"}",
-                                        style = MaterialTheme.typography.labelLarge,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = if (isDark) CrystalWhite else Color(0xFF0F172A),
-                                        fontSize = 13.sp,
-                                        letterSpacing = 0.3.sp
-                                    )
                                 }
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                    contentDescription = "View timeline tasks",
-                                    tint = if (isDark) ElectricCyan.copy(alpha = 0.75f) else Color(0xFF0083A0),
-                                    modifier = Modifier.size(14.dp)
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(10.dp))
-                    }
-                }
-
-            // Notes List
-            if (uiState.notes.isEmpty() && !uiState.isLoading) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(bottom = 120.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = if (uiState.searchQuery.isNotBlank()) "No matches found" else "A quiet, clean canvas",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        if (uiState.searchQuery.isNotBlank()) {
-                            val query = uiState.searchQuery.trim()
-                            val ctaColor = if (isDark) ElectricGreen else AmoledBlack
-                            Surface(
-                                shape = RoundedCornerShape(999.dp),
-                                color = if (isDark) ElectricGreen.copy(alpha = 0.15f) else AmoledBlack.copy(alpha = 0.08f),
-                                border = BorderStroke(0.6.dp, if (isDark) ElectricGreen.copy(alpha = 0.4f) else AmoledBlack.copy(alpha = 0.25f)),
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(999.dp))
-                                    .clickable {
-                                        viewModel.onSearchQueryChange("")
-                                        viewModel.createNote(
-                                            title = query,
-                                            content = "",
-                                            cardType = "modular"
-                                        ) { onNoteClick(it) }
-                                    }
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.Add,
-                                        contentDescription = null,
-                                        tint = ctaColor,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "Create note \"$query\"",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = ctaColor,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                }
-                            }
-                        } else {
-                            Text(
-                                text = "Jot anything below to begin",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                             )
                         }
+                        .clickable { onTriggerSearch() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "NAUGHTY",
+                        style = BrandTitleStyle,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                }
+
+                // Settings icon in right corner of header
+                IconButton(
+                    onClick = onOpenSettings,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Settings,
+                        contentDescription = "Settings",
+                        tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f),
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+            // Notes List with Top Feature Tiles
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(13.dp)
+            ) {
+                // Top Feature Tile: Timeline tasks banner (hidden when searching)
+                if (uiState.searchQuery.isBlank()) {
+                    item(key = "home_feature_tiles") {
+                        HomeFeatureTiles(
+                            trackerCount = trackerCount,
+                            onOpenTimeline = onOpenTimeline,
+                            modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
+                        )
                     }
                 }
-            } else {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(13.dp)
-                ) {
+
+                if (uiState.notes.isEmpty() && !uiState.isLoading) {
+                    item(key = "empty_placeholder") {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 60.dp, bottom = 120.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = if (uiState.searchQuery.isNotBlank()) "No matches found" else "A quiet, clean canvas",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                if (uiState.searchQuery.isNotBlank()) {
+                                    val query = uiState.searchQuery.trim()
+                                    val ctaColor = if (isDark) ElectricGreen else AmoledBlack
+                                    Surface(
+                                        shape = RoundedCornerShape(999.dp),
+                                        color = if (isDark) ElectricGreen.copy(alpha = 0.15f) else AmoledBlack.copy(alpha = 0.08f),
+                                        border = BorderStroke(0.6.dp, if (isDark) ElectricGreen.copy(alpha = 0.4f) else AmoledBlack.copy(alpha = 0.25f)),
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(999.dp))
+                                            .clickable {
+                                                viewModel.onSearchQueryChange("")
+                                                viewModel.createNote(
+                                                    title = query,
+                                                    content = "",
+                                                    cardType = "modular"
+                                                ) { onNoteClick(it) }
+                                            }
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.Add,
+                                                contentDescription = null,
+                                                tint = ctaColor,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = "Create note \"$query\"",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = ctaColor,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    Text(
+                                        text = "Jot anything below to begin",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                } else {
                     items(
                         items = uiState.notes,
                         key = { it.id }
@@ -469,11 +350,11 @@ fun NoteListScreen(
                             )
                         }
                     }
+                }
 
-                    // Bottom padding to clear floating capsule and dots
-                    item {
-                        Spacer(modifier = Modifier.height(140.dp))
-                    }
+                // Bottom padding to clear floating capsule and dots
+                item(key = "bottom_spacer") {
+                    Spacer(modifier = Modifier.height(140.dp))
                 }
             }
         }
@@ -823,31 +704,6 @@ fun NoteListScreen(
                     )
                 }
 
-                // Archive
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable {
-                            viewModel.archiveNote(targetNote.id)
-                            actionNote = null
-                        }
-                        .padding(vertical = 12.dp, horizontal = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Archive,
-                        contentDescription = null,
-                        tint = if (isDark) CrystalWhite.copy(alpha = 0.75f) else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(22.dp)
-                    )
-                    Spacer(modifier = Modifier.width(14.dp))
-                    Text(
-                        text = "Archive note",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = if (isDark) CrystalWhite else AmoledBlack
-                    )
-                }
 
                 // Delete
                 Row(
@@ -855,7 +711,7 @@ fun NoteListScreen(
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))
                         .clickable {
-                            viewModel.deleteNote(targetNote.id)
+                            noteToDelete = targetNote
                             actionNote = null
                         }
                         .padding(vertical = 12.dp, horizontal = 8.dp),
@@ -878,6 +734,38 @@ fun NoteListScreen(
                 Spacer(modifier = Modifier.height(16.dp))
             }
         }
+    }
+
+    if (noteToDelete != null) {
+        val target = noteToDelete!!
+        AlertDialog(
+            onDismissRequest = { noteToDelete = null },
+            title = { Text("Delete Note?") },
+            text = {
+                val title = target.title.trim()
+                if (title.isNotBlank()) {
+                    Text("Are you sure you want to delete \"$title\"? It will be moved to Trash.")
+                } else {
+                    Text("Are you sure you want to delete this note? It will be moved to Trash.")
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.deleteNote(target.id)
+                        noteToDelete = null
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { noteToDelete = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 
     if (showNoSecurityDialog) {
@@ -904,5 +792,5 @@ fun NoteListScreen(
             }
         )
     }
-}
+
 }

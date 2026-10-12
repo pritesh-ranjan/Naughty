@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -46,11 +45,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -66,7 +63,6 @@ import com.example.naughty.data.local.timeline.TimelineMilestone
 import com.example.naughty.data.local.timeline.TimelineUpdate
 import com.example.naughty.data.local.timeline.TimelineUpdateType
 import com.example.naughty.ui.theme.AmoledBlack
-import com.example.naughty.ui.theme.BrandTitleStyle
 import com.example.naughty.ui.theme.CrystalWhite
 import com.example.naughty.ui.theme.isAppInDarkTheme
 import com.example.naughty.ui.timeline.TimelineColors
@@ -78,6 +74,8 @@ import com.example.naughty.ui.timeline.components.TimelineStepper
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 @Composable
 fun TimelineDetailScreen(

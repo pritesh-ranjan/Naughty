@@ -30,16 +30,16 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 fun hasUsageStatsPermission(context: Context): Boolean {
     val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
@@ -78,12 +78,6 @@ fun PermissionGate(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         hasNotifications = granted
-    }
-
-    LaunchedEffect(hasUsageStats, hasNotifications) {
-        if (hasUsageStats && hasNotifications) {
-            com.example.naughty.binding.BindingDetectorService.start(context)
-        }
     }
 
     if ((hasUsageStats && hasNotifications) || dismissed || bypass) {

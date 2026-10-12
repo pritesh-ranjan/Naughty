@@ -18,7 +18,7 @@ import com.example.naughty.data.local.timeline.TimelineUpdate
         TimelineMilestone::class,
         TimelineUpdate::class
     ],
-    version = 7,
+    version = 10,
     exportSchema = false
 )
 @TypeConverters(Converters::class)

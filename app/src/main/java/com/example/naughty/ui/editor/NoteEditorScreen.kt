@@ -3,17 +3,10 @@ package com.example.naughty.ui.editor
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.gestures.rememberTransformableState
-import androidx.compose.foundation.gestures.transformable
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,6 +23,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -57,10 +57,10 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Redo
 import androidx.compose.material.icons.automirrored.outlined.Undo
 import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.ArrowDropDown
 import androidx.compose.material.icons.outlined.CheckBox
 import androidx.compose.material.icons.outlined.CheckBoxOutlineBlank
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.automirrored.outlined.FormatListBulleted
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Link
@@ -78,6 +78,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.unit.Dp
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material.icons.outlined.DocumentScanner
 import androidx.compose.foundation.horizontalScroll
@@ -103,10 +106,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -115,15 +116,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.naughty.ui.notelist.AttachedImageThumbnail
-import com.example.naughty.ui.theme.BrandSubtitleStyle
 import com.example.naughty.ui.theme.BrandTitleStyle
-import com.example.naughty.ui.theme.SubtitleColorDark
-import com.example.naughty.ui.theme.SubtitleColorLight
 import com.example.naughty.ui.theme.getNoteColorPalette
 import com.example.naughty.ui.theme.NoteThemeRegistry
 import com.example.naughty.ui.components.paperBackground
@@ -132,25 +129,17 @@ import com.example.naughty.ui.theme.CrystalWhite
 import com.example.naughty.ui.theme.ElectricAmber
 import com.example.naughty.ui.theme.ElectricCyan
 import com.example.naughty.ui.theme.ElectricGreen
-import com.example.naughty.ui.theme.ElectricPink
 import com.example.naughty.ui.theme.isAppInDarkTheme
 import com.example.naughty.ui.components.FullscreenImageViewer
 import com.example.naughty.ui.editor.ThemeSelectionSheet
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.RecordVoiceOver
 import com.example.naughty.ui.components.VoiceNotePlayer
 import com.example.naughty.ui.components.VoiceRecordingSheet
-import androidx.compose.material.icons.automirrored.outlined.ArrowForward
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
-import androidx.compose.ui.input.nestedscroll.NestedScrollSource
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import com.example.naughty.ui.theme.isAppInDarkTheme
 import com.example.naughty.ui.editor.InlineReminder
@@ -166,6 +155,8 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import java.io.File
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 private data class SelectedReminderContext(
     val selectedText: String,
@@ -232,11 +223,21 @@ fun NoteEditorScreen(
     var fullscreenImageUri by remember { mutableStateOf<String?>(null) }
     var showVoiceSheet by remember { mutableStateOf(false) }
     var voiceSheetTab by remember { mutableIntStateOf(0) }
+    var showDeleteNoteConfirmDialog by remember { mutableStateOf(false) }
+    var imageToDelete by remember { mutableStateOf<String?>(null) }
 
     var focusedBlockId by remember { mutableStateOf<String?>(null) }
     var lastFocusedBlockId by remember { mutableStateOf<String?>(null) }
     var focusedCursorOffset by remember { mutableIntStateOf(0) }
     var requestFocusBlockId by remember { mutableStateOf<String?>(null) }
+    var requestFocusCursorPosition by remember { mutableStateOf<Int?>(null) }
+
+    var toolbarBounds by remember { mutableStateOf<Rect?>(null) }
+    LaunchedEffect(uiState.isLocked, isUnlockedInSession) {
+        if (uiState.isLocked && !isUnlockedInSession) {
+            toolbarBounds = null
+        }
+    }
 
     var rawTextFieldValue by remember { mutableStateOf(TextFieldValue(uiState.content)) }
     LaunchedEffect(uiState.content) {
@@ -337,6 +338,12 @@ fun NoteEditorScreen(
                 val touchSlop = viewConfiguration.touchSlop
                 awaitEachGesture {
                     val down = awaitFirstDown(pass = PointerEventPass.Initial, requireUnconsumed = false)
+                    val tb = toolbarBounds
+                    if (tb != null && down.position.y >= tb.top - 16f && down.position.x in (tb.left - 16f)..(tb.right + 16f)) {
+                        // Touch originated on or around the floating bottom toolbar -
+                        // allow toolbar swiping/scrolling and clicks without intercepting note changes!
+                        return@awaitEachGesture
+                    }
                     var totalX = 0f
                     var totalY = 0f
                     var isHorizontalSwipe = false
@@ -668,18 +675,20 @@ fun NoteEditorScreen(
                                         showMenu = false
                                     }
                                 )
-                                DropdownMenuItem(
-                                    text = { Text("Archive note") },
-                                    onClick = {
-                                        showMenu = false
-                                        viewModel.archiveNote { onBack() }
-                                    }
-                                )
+
                                 DropdownMenuItem(
                                     text = { Text("Delete note", color = MaterialTheme.colorScheme.error) },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Delete,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    },
                                     onClick = {
                                         showMenu = false
-                                        viewModel.deleteNote { onBack() }
+                                        showDeleteNoteConfirmDialog = true
                                     }
                                 )
                             }
@@ -755,15 +764,16 @@ fun NoteEditorScreen(
                     BasicTextField(
                         value = rawTextFieldValue,
                         onValueChange = { newValue ->
-                            rawTextFieldValue = newValue
-                            if (!newValue.selection.collapsed) {
-                                val sel = newValue.text.substring(newValue.selection.min, newValue.selection.max).trim()
+                            val transformed = BulletTextHelper.handleValueChange(rawTextFieldValue, newValue) ?: newValue
+                            rawTextFieldValue = transformed
+                            if (!transformed.selection.collapsed) {
+                                val sel = transformed.text.substring(transformed.selection.min, transformed.selection.max).trim()
                                 if (sel.isNotBlank()) {
-                                    lastSelectionContext = SelectedReminderContext(sel, newValue.selection, isRawMode = true)
+                                    lastSelectionContext = SelectedReminderContext(sel, transformed.selection, isRawMode = true)
                                 }
                             }
-                            if (newValue.text != uiState.content) {
-                                viewModel.updateContent(newValue.text)
+                            if (transformed.text != uiState.content) {
+                                viewModel.updateContent(transformed.text)
                             }
                         },
                         visualTransformation = reminderVisualTransformation,
@@ -777,6 +787,14 @@ fun NoteEditorScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(400.dp)
+                            .onPreviewKeyEvent { event ->
+                                BulletTextHelper.handleKeyEvent(event, rawTextFieldValue) { transformed ->
+                                    rawTextFieldValue = transformed
+                                    if (transformed.text != uiState.content) {
+                                        viewModel.updateContent(transformed.text)
+                                    }
+                                }
+                            }
                     )
                 } else {
                     // Aesthetic Modular Card View (Anti-note style)
@@ -913,7 +931,12 @@ fun NoteEditorScreen(
                                                     modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
                                                     verticalAlignment = Alignment.CenterVertically
                                                 ) {
-                                                    Text("🔔", fontSize = 11.5.sp)
+                                                    Icon(
+                                                        imageVector = Icons.Filled.Notifications,
+                                                        contentDescription = null,
+                                                        tint = currentTheme.accent,
+                                                        modifier = Modifier.size(13.dp)
+                                                    )
                                                     Spacer(modifier = Modifier.width(4.dp))
                                                     Text(
                                                         text = noteReminder.displayText,
@@ -986,7 +1009,11 @@ fun NoteEditorScreen(
                                                 currentTheme = currentTheme,
                                                 showPlaceholder = showEmptyPlaceholder,
                                                 isRequestedFocus = requestFocusBlockId == block.id,
-                                                onFocusConsumed = { requestFocusBlockId = null },
+                                                requestedCursorPosition = if (requestFocusBlockId == block.id) requestFocusCursorPosition else null,
+                                                onFocusConsumed = {
+                                                    requestFocusBlockId = null
+                                                    requestFocusCursorPosition = null
+                                                },
                                                 onFocusChanged = { isFocused, cursorOffset ->
                                                     if (isFocused) {
                                                         focusedBlockId = block.id
@@ -1052,7 +1079,7 @@ fun NoteEditorScreen(
                                 modifier = Modifier.fillMaxSize()
                             )
                             IconButton(
-                                onClick = { viewModel.removeImage(imageUri) },
+                                onClick = { imageToDelete = imageUri },
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
                                     .padding(8.dp)
@@ -1061,8 +1088,8 @@ fun NoteEditorScreen(
                                     .background(Color.Black.copy(alpha = 0.55f))
                             ) {
                                 Icon(
-                                    imageVector = Icons.Outlined.Close,
-                                    contentDescription = "Remove image",
+                                    imageVector = Icons.Outlined.Delete,
+                                    contentDescription = "Delete image",
                                     tint = Color.White,
                                     modifier = Modifier.size(16.dp)
                                 )
@@ -1097,313 +1124,419 @@ fun NoteEditorScreen(
 
         // Floating Bottom Editor Toolbar
         if (!uiState.isLocked || isUnlockedInSession) {
+            val toolbarScrollState = rememberScrollState()
             Surface(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .windowInsetsPadding(WindowInsets.navigationBars)
-                .imePadding()
-                .padding(bottom = 14.dp, start = 16.dp, end = 16.dp)
-                .height(54.dp)
-                .shadow(elevation = 16.dp, shape = RoundedCornerShape(27.dp)),
-            shape = RoundedCornerShape(27.dp),
-            color = if (isDark) AmoledBlack else CrystalWhite,
-            border = BorderStroke(0.6.dp, if (isDark) Color(0xFF1E1E24) else Color(0xFFE4E4E7))
-        ) {
-            Row(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterHorizontally),
-                verticalAlignment = Alignment.CenterVertically
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .imePadding()
+                    .padding(bottom = 14.dp, start = 16.dp, end = 16.dp)
+                    .height(54.dp)
+                    .shadow(elevation = 16.dp, shape = RoundedCornerShape(27.dp))
+                    .onGloballyPositioned { coordinates ->
+                        toolbarBounds = coordinates.boundsInRoot()
+                    },
+                shape = RoundedCornerShape(27.dp),
+                color = if (isDark) AmoledBlack else CrystalWhite,
+                border = BorderStroke(0.6.dp, if (isDark) Color(0xFF1E1E24) else Color(0xFFE4E4E7))
             ) {
-                // (+) Add block button
-                Box {
+                CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
+                    BoxWithConstraints(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        val containerWidth = maxWidth
+                        Row(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .horizontalScroll(toolbarScrollState)
+                                .widthIn(min = containerWidth)
+                                .padding(horizontal = 14.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // (+) Add block button
+                            Box(
+                                modifier = Modifier.size(34.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                IconButton(
+                            onClick = { showAddBlockMenu = true },
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Add,
+                                contentDescription = "Add block",
+                                tint = if (isDark) ElectricGreen else AmoledBlack,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        DropdownMenu(
+                            expanded = showAddBlockMenu,
+                            onDismissRequest = { showAddBlockMenu = false },
+                            modifier = Modifier.background(if (isDark) AmoledBlack else CrystalWhite)
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Checklist Item") },
+                                leadingIcon = { Icon(Icons.Outlined.CheckBox, null) },
+                                onClick = {
+                                    val targetId = focusedBlockId ?: lastFocusedBlockId
+                                    val newId = viewModel.addChecklistItemAtCursor(targetId, focusedCursorOffset)
+                                    requestFocusBlockId = newId
+                                    showAddBlockMenu = false
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Bullet Point") },
+                                leadingIcon = { Icon(Icons.AutoMirrored.Outlined.FormatListBulleted, null) },
+                                onClick = {
+                                    if (uiState.isRawMarkdownMode) {
+                                        val (updatedText, newCursor) = viewModel.toggleOrAddBulletInRaw(rawTextFieldValue.text, rawTextFieldValue.selection.start)
+                                        rawTextFieldValue = TextFieldValue(text = updatedText, selection = TextRange(newCursor))
+                                    } else {
+                                        val targetId = focusedBlockId ?: lastFocusedBlockId
+                                        val (blockId, newCursor) = viewModel.toggleOrAddBulletItem(targetId, focusedCursorOffset)
+                                        requestFocusBlockId = blockId
+                                        requestFocusCursorPosition = newCursor
+                                    }
+                                    showAddBlockMenu = false
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Attach Photo") },
+                                leadingIcon = { Icon(Icons.Outlined.Image, null) },
+                                onClick = {
+                                    showAddBlockMenu = false
+                                    imagePickerLauncher.launch("image/*")
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Attach Text from Photo") },
+                                leadingIcon = { Icon(Icons.Outlined.DocumentScanner, null) },
+                                onClick = {
+                                    showAddBlockMenu = false
+                                    ocrImagePickerLauncher.launch("image/*")
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Record Voice Note") },
+                                leadingIcon = { Icon(Icons.Outlined.Mic, null) },
+                                onClick = {
+                                    showAddBlockMenu = false
+                                    voiceSheetTab = 0
+                                    showVoiceSheet = true
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Voice to Text (Offline)") },
+                                leadingIcon = { Icon(Icons.Outlined.RecordVoiceOver, null) },
+                                onClick = {
+                                    showAddBlockMenu = false
+                                    voiceSheetTab = 1
+                                    showVoiceSheet = true
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Reminder (Bell)") },
+                                leadingIcon = { Icon(Icons.Outlined.Notifications, null) },
+                                onClick = {
+                                    showAddBlockMenu = false
+                                    val currentSel = when {
+                                        uiState.isRawMarkdownMode && !rawTextFieldValue.selection.collapsed -> {
+                                            val t = rawTextFieldValue.text.substring(rawTextFieldValue.selection.min, rawTextFieldValue.selection.max).trim()
+                                            if (t.isNotBlank()) SelectedReminderContext(t, rawTextFieldValue.selection, isRawMode = true) else null
+                                        }
+                                        else -> lastSelectionContext
+                                    }
+
+                                    if (currentSel != null && currentSel.selectedText.isNotBlank()) {
+                                        activeSelectionContext = currentSel
+                                        reminderInitialText = currentSel.selectedText
+                                    } else {
+                                        activeSelectionContext = null
+                                        reminderInitialText = ""
+                                    }
+                                    reminderTargetBlockId = null
+                                    reminderInitialTime = null
+                                    isEditingNoteReminder = false
+                                    showReminderSheet = true
+                                }
+                            )
+                        }
+                    }
+
+                    // Aa Format / Raw Markdown button
                     IconButton(
-                        onClick = { showAddBlockMenu = true },
+                        onClick = { viewModel.toggleRawMarkdownMode() },
+                        modifier = Modifier.size(34.dp)
+                    ) {
+                        Text(
+                            text = "Aa",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    // Checkbox button
+                    IconButton(
+                        onClick = {
+                            val targetId = focusedBlockId ?: lastFocusedBlockId
+                            val newId = viewModel.addChecklistItemAtCursor(targetId, focusedCursorOffset)
+                            requestFocusBlockId = newId
+                        },
                         modifier = Modifier.size(34.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Outlined.Add,
-                            contentDescription = "Add block",
-                            tint = if (isDark) ElectricGreen else AmoledBlack,
+                            imageVector = Icons.Outlined.CheckBox,
+                            contentDescription = "Add checkbox",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp)
                         )
                     }
 
-                    DropdownMenu(
-                        expanded = showAddBlockMenu,
-                        onDismissRequest = { showAddBlockMenu = false },
-                        modifier = Modifier.background(if (isDark) AmoledBlack else CrystalWhite)
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Checklist Item") },
-                            leadingIcon = { Icon(Icons.Outlined.CheckBox, null) },
-                            onClick = {
+                    // Bullet list button
+                    IconButton(
+                        onClick = {
+                            if (uiState.isRawMarkdownMode) {
+                                val (updatedText, newCursor) = viewModel.toggleOrAddBulletInRaw(rawTextFieldValue.text, rawTextFieldValue.selection.start)
+                                rawTextFieldValue = TextFieldValue(text = updatedText, selection = TextRange(newCursor))
+                            } else {
                                 val targetId = focusedBlockId ?: lastFocusedBlockId
-                                val newId = viewModel.addChecklistItemAtCursor(targetId, focusedCursorOffset)
-                                requestFocusBlockId = newId
-                                showAddBlockMenu = false
+                                val (blockId, newCursor) = viewModel.toggleOrAddBulletItem(targetId, focusedCursorOffset)
+                                requestFocusBlockId = blockId
+                                requestFocusCursorPosition = newCursor
                             }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Bullet Point") },
-                            leadingIcon = { Icon(Icons.AutoMirrored.Outlined.FormatListBulleted, null) },
-                            onClick = {
-                                viewModel.addBulletItem("New note")
-                                showAddBlockMenu = false
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Attach Photo") },
-                            leadingIcon = { Icon(Icons.Outlined.Image, null) },
-                            onClick = {
-                                showAddBlockMenu = false
-                                imagePickerLauncher.launch("image/*")
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Attach Text from Photo") },
-                            leadingIcon = { Icon(Icons.Outlined.DocumentScanner, null) },
-                            onClick = {
-                                showAddBlockMenu = false
-                                ocrImagePickerLauncher.launch("image/*")
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Record Voice Note") },
-                            leadingIcon = { Icon(Icons.Outlined.Mic, null) },
-                            onClick = {
-                                showAddBlockMenu = false
-                                voiceSheetTab = 0
-                                showVoiceSheet = true
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Voice to Text (Offline)") },
-                            leadingIcon = { Icon(Icons.Outlined.RecordVoiceOver, null) },
-                            onClick = {
-                                showAddBlockMenu = false
-                                voiceSheetTab = 1
-                                showVoiceSheet = true
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Reminder (Bell)") },
-                            leadingIcon = { Icon(Icons.Outlined.Notifications, null) },
-                            onClick = {
-                                showAddBlockMenu = false
-                                val currentSel = when {
-                                    uiState.isRawMarkdownMode && !rawTextFieldValue.selection.collapsed -> {
-                                        val t = rawTextFieldValue.text.substring(rawTextFieldValue.selection.min, rawTextFieldValue.selection.max).trim()
-                                        if (t.isNotBlank()) SelectedReminderContext(t, rawTextFieldValue.selection, isRawMode = true) else null
-                                    }
-                                    else -> lastSelectionContext
-                                }
-
-                                if (currentSel != null && currentSel.selectedText.isNotBlank()) {
-                                    activeSelectionContext = currentSel
-                                    reminderInitialText = currentSel.selectedText
-                                } else {
-                                    activeSelectionContext = null
-                                    reminderInitialText = ""
-                                }
-                                reminderTargetBlockId = null
-                                reminderInitialTime = null
-                                isEditingNoteReminder = false
-                                showReminderSheet = true
-                            }
-                        )
-                    }
-                }
-
-                // Aa Format / Raw Markdown button
-                IconButton(
-                    onClick = { viewModel.toggleRawMarkdownMode() },
-                    modifier = Modifier.size(34.dp)
-                ) {
-                    Text(
-                        text = "Aa",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                // Checkbox button
-                IconButton(
-                    onClick = {
-                        val targetId = focusedBlockId ?: lastFocusedBlockId
-                        val newId = viewModel.addChecklistItemAtCursor(targetId, focusedCursorOffset)
-                        requestFocusBlockId = newId
-                    },
-                    modifier = Modifier.size(34.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.CheckBox,
-                        contentDescription = "Add checkbox",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(19.dp)
-                    )
-                }
-
-                // Bullet list button
-                IconButton(
-                    onClick = { viewModel.addBulletItem("New point") },
-                    modifier = Modifier.size(34.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Outlined.FormatListBulleted,
-                        contentDescription = "Bullet list",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(19.dp)
-                    )
-                }
-
-                // Image button: launches real image picker
-                IconButton(
-                    onClick = { imagePickerLauncher.launch("image/*") },
-                    modifier = Modifier.size(34.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Image,
-                        contentDescription = "Attach image",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(19.dp)
-                    )
-                }
-
-                // Text from image button: launches local OCR image picker
-                IconButton(
-                    onClick = { ocrImagePickerLauncher.launch("image/*") },
-                    enabled = !isExtractingText,
-                    modifier = Modifier.size(34.dp)
-                ) {
-                    if (isExtractingText) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
-                            color = currentTheme.accent
-                        )
-                    } else {
+                        },
+                        modifier = Modifier.size(34.dp)
+                    ) {
                         Icon(
-                            imageVector = Icons.Outlined.DocumentScanner,
-                            contentDescription = "Attach text from image",
+                            imageVector = Icons.AutoMirrored.Outlined.FormatListBulleted,
+                            contentDescription = "Bullet list",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(19.dp)
+                            modifier = Modifier.size(20.dp)
                         )
                     }
-                }
 
-                // Voice Note / Speech to Text button
-                IconButton(
-                    onClick = {
-                        voiceSheetTab = 0
-                        showVoiceSheet = true
-                    },
-                    modifier = Modifier.size(34.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Mic,
-                        contentDescription = "Voice note & dictation",
-                        tint = currentTheme.accent,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
+                    // Image button: launches real image picker
+                    IconButton(
+                        onClick = { imagePickerLauncher.launch("image/*") },
+                        modifier = Modifier.size(34.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Image,
+                            contentDescription = "Attach image",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
 
-                // Link button
-                IconButton(
-                    onClick = { viewModel.updateContent(uiState.content + "\nhttps://") },
-                    modifier = Modifier.size(34.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Link,
-                        contentDescription = "Link",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(19.dp)
-                    )
-                }
-
-                // Bell Icon (Reminder button)
-                IconButton(
-                    onClick = {
-                        val targetId = focusedBlockId ?: lastFocusedBlockId
-                        val focusedChecklist = uiState.blocks.find { it.id == targetId } as? EditorBlock.Checklist
-                        if (focusedChecklist != null) {
-                            activeSelectionContext = null
-                            reminderTargetBlockId = focusedChecklist.id
-                            reminderInitialText = focusedChecklist.text
-                            reminderInitialTime = focusedChecklist.reminder?.timestampMillis
-                            isEditingNoteReminder = false
-                            showReminderSheet = true
+                    // Text from image button: launches local OCR image picker
+                    IconButton(
+                        onClick = { ocrImagePickerLauncher.launch("image/*") },
+                        enabled = !isExtractingText,
+                        modifier = Modifier.size(34.dp)
+                    ) {
+                        if (isExtractingText) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = currentTheme.accent
+                            )
                         } else {
-                            activeSelectionContext = null
-                            reminderTargetBlockId = null
-                            reminderInitialText = uiState.title.ifBlank { "Note Reminder" }
-                            reminderInitialTime = uiState.reminderTime
-                            isEditingNoteReminder = true
-                            showReminderSheet = true
-                        }
-                    },
-                    modifier = Modifier.size(34.dp)
-                ) {
-                    if (uiState.hasActiveReminders) {
-                        Box(contentAlignment = Alignment.Center) {
                             Icon(
-                                imageVector = Icons.Filled.Notifications,
-                                contentDescription = "Active Reminder",
-                                tint = currentTheme.accent,
+                                imageVector = Icons.Outlined.DocumentScanner,
+                                contentDescription = "Attach text from image",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(20.dp)
                             )
-                            Box(
-                                modifier = Modifier
-                                    .size(6.dp)
-                                    .align(Alignment.TopEnd)
-                                    .clip(CircleShape)
-                                    .background(currentTheme.accent)
-                            )
                         }
-                    } else {
+                    }
+
+                    // Voice Note / Speech to Text button
+                    IconButton(
+                        onClick = {
+                            voiceSheetTab = 0
+                            showVoiceSheet = true
+                        },
+                        modifier = Modifier.size(34.dp)
+                    ) {
                         Icon(
-                            imageVector = Icons.Outlined.Notifications,
-                            contentDescription = "Set Reminder",
+                            imageVector = Icons.Outlined.Mic,
+                            contentDescription = "Voice note & dictation",
+                            tint = currentTheme.accent,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    // Link button
+                    IconButton(
+                        onClick = { viewModel.updateContent(uiState.content + "\nhttps://") },
+                        modifier = Modifier.size(34.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Link,
+                            contentDescription = "Link",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(19.dp)
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    // Bell Icon (Reminder button)
+                    IconButton(
+                        onClick = {
+                            val targetId = focusedBlockId ?: lastFocusedBlockId
+                            val focusedChecklist = uiState.blocks.find { it.id == targetId } as? EditorBlock.Checklist
+                            if (focusedChecklist != null) {
+                                activeSelectionContext = null
+                                reminderTargetBlockId = focusedChecklist.id
+                                reminderInitialText = focusedChecklist.text
+                                reminderInitialTime = focusedChecklist.reminder?.timestampMillis
+                                isEditingNoteReminder = false
+                                showReminderSheet = true
+                            } else {
+                                activeSelectionContext = null
+                                reminderTargetBlockId = null
+                                reminderInitialText = uiState.title.ifBlank { "Note Reminder" }
+                                reminderInitialTime = uiState.reminderTime
+                                isEditingNoteReminder = true
+                                showReminderSheet = true
+                            }
+                        },
+                        modifier = Modifier.size(34.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (uiState.hasActiveReminders) Icons.Filled.Notifications else Icons.Outlined.Notifications,
+                            contentDescription = if (uiState.hasActiveReminders) "Active Reminder" else "Set Reminder",
+                            tint = if (uiState.hasActiveReminders) currentTheme.accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    // Undo
+                    IconButton(
+                        onClick = { viewModel.undo() },
+                        enabled = uiState.canUndo,
+                        modifier = Modifier.size(34.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Outlined.Undo,
+                            contentDescription = "Undo",
+                            tint = if (uiState.canUndo) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    // Redo
+                    IconButton(
+                        onClick = { viewModel.redo() },
+                        enabled = uiState.canRedo,
+                        modifier = Modifier.size(34.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Outlined.Redo,
+                            contentDescription = "Redo",
+                            tint = if (uiState.canRedo) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }
 
-                // Undo
-                IconButton(
-                    onClick = { viewModel.undo() },
-                    enabled = uiState.canUndo,
-                    modifier = Modifier.size(34.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Outlined.Undo,
-                        contentDescription = "Undo",
-                        tint = if (uiState.canUndo) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
-                        modifier = Modifier.size(18.dp)
+                // Left edge subtle gradient fade when scrolled forward
+                if (toolbarScrollState.canScrollBackward) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .width(24.dp)
+                            .fillMaxHeight()
+                            .background(
+                                Brush.horizontalGradient(
+                                    colors = listOf(
+                                        if (isDark) AmoledBlack else CrystalWhite,
+                                        Color.Transparent
+                                    )
+                                )
+                            )
                     )
                 }
 
-                // Redo
-                IconButton(
-                    onClick = { viewModel.redo() },
-                    enabled = uiState.canRedo,
-                    modifier = Modifier.size(34.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Outlined.Redo,
-                        contentDescription = "Redo",
-                        tint = if (uiState.canRedo) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
-                        modifier = Modifier.size(18.dp)
+                // Right edge subtle gradient fade when more items are hidden
+                if (toolbarScrollState.canScrollForward) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .width(24.dp)
+                            .fillMaxHeight()
+                            .background(
+                                Brush.horizontalGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        if (isDark) AmoledBlack else CrystalWhite
+                                    )
+                                )
+                            )
                     )
                 }
             }
         }
     }
+}
+
+        if (showDeleteNoteConfirmDialog) {
+            AlertDialog(
+                onDismissRequest = { showDeleteNoteConfirmDialog = false },
+                title = { Text("Delete Note?") },
+                text = { Text("Are you sure you want to delete this note? It will be moved to Trash.") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showDeleteNoteConfirmDialog = false
+                            viewModel.deleteNote { onBack() }
+                        },
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text("Delete")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteNoteConfirmDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+
+        if (imageToDelete != null) {
+            AlertDialog(
+                onDismissRequest = { imageToDelete = null },
+                title = { Text("Delete Image?") },
+                text = { Text("Are you sure you want to remove this image from the note?") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            val uri = imageToDelete
+                            imageToDelete = null
+                            if (uri != null) {
+                                if (fullscreenImageUri == uri) {
+                                    fullscreenImageUri = null
+                                }
+                                viewModel.removeImage(uri)
+                            }
+                        },
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text("Delete")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { imageToDelete = null }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
 
         if (showNoSecurityDialog) {
             AlertDialog(
@@ -1672,7 +1805,12 @@ private fun ChecklistItemRow(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp)
                     ) {
-                        Text("🔔", fontSize = 10.sp)
+                        Icon(
+                            imageVector = Icons.Filled.Notifications,
+                            contentDescription = null,
+                            tint = currentTheme.accent,
+                            modifier = Modifier.size(12.dp)
+                        )
                         Spacer(modifier = Modifier.width(3.dp))
                         Text(
                             text = block.reminder.displayText,
@@ -1725,6 +1863,7 @@ private fun TextBlockItem(
     currentTheme: NoteTheme,
     showPlaceholder: Boolean,
     isRequestedFocus: Boolean,
+    requestedCursorPosition: Int? = null,
     onFocusConsumed: () -> Unit,
     onFocusChanged: (Boolean, Int) -> Unit,
     onTextChange: (String) -> Unit,
@@ -1733,17 +1872,18 @@ private fun TextBlockItem(
 ) {
     val focusRequester = remember { FocusRequester() }
     var textFieldValue by remember(block.id) {
+        val initialSel = requestedCursorPosition?.coerceIn(0, block.text.length) ?: block.text.length
         mutableStateOf(
             TextFieldValue(
                 text = block.text,
-                selection = TextRange(block.text.length)
+                selection = TextRange(initialSel)
             )
         )
     }
 
     LaunchedEffect(block.text) {
         if (textFieldValue.text != block.text) {
-            val sel = textFieldValue.selection.start.coerceAtMost(block.text.length)
+            val sel = textFieldValue.selection.start.coerceIn(0, block.text.length)
             textFieldValue = textFieldValue.copy(
                 text = block.text,
                 selection = TextRange(sel)
@@ -1751,8 +1891,11 @@ private fun TextBlockItem(
         }
     }
 
-    LaunchedEffect(isRequestedFocus) {
+    LaunchedEffect(isRequestedFocus, requestedCursorPosition) {
         if (isRequestedFocus) {
+            val targetText = block.text
+            val clamped = requestedCursorPosition?.coerceIn(0, targetText.length) ?: targetText.length
+            textFieldValue = TextFieldValue(text = targetText, selection = TextRange(clamped))
             try {
                 focusRequester.requestFocus()
             } catch (_: Exception) {}
@@ -1783,7 +1926,12 @@ private fun TextBlockItem(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp)
                         ) {
-                            Text("🔔", fontSize = 11.sp)
+                            Icon(
+                                imageVector = Icons.Filled.Notifications,
+                                contentDescription = null,
+                                tint = currentTheme.accent,
+                                modifier = Modifier.size(12.dp)
+                            )
                             Spacer(modifier = Modifier.width(3.dp))
                             Text(
                                 text = reminder.displayText,
@@ -1801,15 +1949,25 @@ private fun TextBlockItem(
         BasicTextField(
             value = textFieldValue,
             onValueChange = { newValue ->
-                textFieldValue = newValue
-                onFocusChanged(true, newValue.selection.start)
-                if (newValue.text != block.text) {
-                    onTextChange(newValue.text)
+                val transformed = BulletTextHelper.handleValueChange(textFieldValue, newValue) ?: newValue
+                textFieldValue = transformed
+                onFocusChanged(true, transformed.selection.start)
+                if (transformed.text != block.text) {
+                    onTextChange(transformed.text)
                 }
             },
             modifier = Modifier
                 .fillMaxWidth()
                 .focusRequester(focusRequester)
+                .onPreviewKeyEvent { event ->
+                    BulletTextHelper.handleKeyEvent(event, textFieldValue) { transformed ->
+                        textFieldValue = transformed
+                        onFocusChanged(true, transformed.selection.start)
+                        if (transformed.text != block.text) {
+                            onTextChange(transformed.text)
+                        }
+                    }
+                }
                 .onFocusChanged { focusState ->
                     onFocusChanged(focusState.isFocused, textFieldValue.selection.start)
                 }

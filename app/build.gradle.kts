@@ -110,8 +110,6 @@ dependencies {
 
   // Arch Components
   implementation(libs.androidx.lifecycle.runtime.compose)
-  implementation(libs.androidx.lifecycle.viewmodel.compose)
-  implementation(libs.androidx.lifecycle.service)
 
   // Compose
   implementation(libs.androidx.compose.ui)
@@ -139,16 +137,10 @@ dependencies {
   // Navigation 3
   implementation(libs.androidx.navigation3.ui)
   implementation(libs.androidx.navigation3.runtime)
-  implementation(libs.androidx.lifecycle.viewmodel.navigation3)
 
   // Room
   implementation(libs.androidx.room.runtime)
   ksp(libs.androidx.room.compiler)
-
-  // Markwon
-  implementation(libs.markwon.core)
-  implementation(libs.markwon.ext.strikethrough)
-  implementation(libs.markwon.ext.tables)
 
   // DataStore
   implementation(libs.androidx.datastore.preferences)

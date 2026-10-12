@@ -5,11 +5,9 @@ import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
-import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.naughty.binding.BindingDetectorService
 import com.example.naughty.data.local.AppBinding
 import com.example.naughty.data.local.BindingType
 import com.example.naughty.data.repository.BindingRepository
@@ -20,6 +18,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Calendar
+import androidx.compose.runtime.getValue
 
 data class InstalledApp(
     val packageName: String,
@@ -234,14 +233,6 @@ class BindingViewModel(
         )
     }
 
-    fun setBindingType(type: BindingType) {
-        _uiState.value = _uiState.value.copy(selectedType = type)
-    }
-
-    fun setExpirationOption(option: ExpirationOption) {
-        _uiState.value = _uiState.value.copy(expirationOption = option)
-    }
-
     fun setBindingMode(mode: BindingModeOption) {
         when (mode) {
             BindingModeOption.ALWAYS_ACTIVE -> {
@@ -319,11 +310,6 @@ class BindingViewModel(
                 type = _uiState.value.selectedType,
                 expiresAt = expiresAt
             )
-
-            // Start foreground detector service
-            try {
-                BindingDetectorService.start(context)
-            } catch (_: Exception) {}
         }
     }
 

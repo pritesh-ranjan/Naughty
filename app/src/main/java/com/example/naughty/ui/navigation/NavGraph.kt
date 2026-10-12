@@ -14,3 +14,6 @@ data object TimelineListKey : NavKey
 
 @Serializable
 data class TimelineDetailKey(val trackerId: String) : NavKey
+
+@Serializable
+data object SettingsKey : NavKey

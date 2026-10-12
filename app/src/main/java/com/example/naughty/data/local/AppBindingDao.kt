@@ -11,16 +11,16 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface AppBindingDao {
 
-    @Query("SELECT * FROM app_binding WHERE isActive = 1 AND (expiresAt IS NULL OR expiresAt > :now) ORDER BY createdAt DESC")
+    @Query("SELECT * FROM app_binding WHERE isActive = 1 AND (expiresAt IS NULL OR expiresAt > :now) AND noteId IN (SELECT id FROM note_metadata WHERE isDeleted = 0) ORDER BY createdAt DESC")
     fun getAllActive(now: Long): Flow<List<AppBinding>>
 
-    @Query("SELECT * FROM app_binding WHERE packageName = :packageName AND isActive = 1 AND (expiresAt IS NULL OR expiresAt > :now)")
+    @Query("SELECT * FROM app_binding WHERE packageName = :packageName AND isActive = 1 AND (expiresAt IS NULL OR expiresAt > :now) AND noteId IN (SELECT id FROM note_metadata WHERE isDeleted = 0)")
     suspend fun getActiveByPackage(packageName: String, now: Long): List<AppBinding>
 
     @Query("SELECT * FROM app_binding WHERE noteId = :noteId ORDER BY createdAt DESC")
     fun getByNoteId(noteId: String): Flow<List<AppBinding>>
 
-    @Query("SELECT DISTINCT packageName FROM app_binding WHERE isActive = 1 AND (expiresAt IS NULL OR expiresAt > :now)")
+    @Query("SELECT DISTINCT packageName FROM app_binding WHERE isActive = 1 AND (expiresAt IS NULL OR expiresAt > :now) AND noteId IN (SELECT id FROM note_metadata WHERE isDeleted = 0)")
     fun getActivePackageNames(now: Long): Flow<List<String>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -41,6 +41,9 @@ interface AppBindingDao {
     @Query("DELETE FROM app_binding WHERE id = :id")
     suspend fun deleteById(id: String)
 
-    @Query("SELECT COUNT(*) FROM app_binding WHERE isActive = 1 AND (expiresAt IS NULL OR expiresAt > :now)")
+    @Query("DELETE FROM app_binding WHERE noteId = :noteId")
+    suspend fun deleteByNoteId(noteId: String)
+
+    @Query("SELECT COUNT(*) FROM app_binding WHERE isActive = 1 AND (expiresAt IS NULL OR expiresAt > :now) AND noteId IN (SELECT id FROM note_metadata WHERE isDeleted = 0)")
     fun activeCount(now: Long): Flow<Int>
 }

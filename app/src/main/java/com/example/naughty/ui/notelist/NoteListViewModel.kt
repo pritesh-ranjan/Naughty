@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+import kotlinx.coroutines.flow.map
+
 data class NoteListUiState(
     val notes: List<NoteMetadata> = emptyList(),
     val rawContents: Map<String, String> = emptyMap(),
@@ -30,16 +32,10 @@ class NoteListViewModel(
     private val _uiState = MutableStateFlow(NoteListUiState())
     val uiState: StateFlow<NoteListUiState> = _uiState.asStateFlow()
 
-    val archivedNotes: StateFlow<List<NoteMetadata>> = noteRepository.getAllArchived()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
     val deletedNotes: StateFlow<List<NoteMetadata>> = noteRepository.getAllDeleted()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val activeCount: StateFlow<Int> = noteRepository.countActive()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
-
-    val archivedCount: StateFlow<Int> = noteRepository.countArchived()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     val deletedCount: StateFlow<Int> = noteRepository.countDeleted()
@@ -133,25 +129,6 @@ class NoteListViewModel(
         }
     }
 
-    fun createQuickJot(text: String, onCreated: (String) -> Unit) {
-        val trimmed = text.trim()
-        if (trimmed.isBlank()) return
-
-        val title = trimmed.lineSequence().firstOrNull()?.take(60) ?: "Quick note"
-        val isChecklist = trimmed.startsWith("- [") || trimmed.startsWith("[ ]")
-        val cardType = if (isChecklist) "checklist" else "modular"
-
-        viewModelScope.launch {
-            val metadata = noteRepository.createNote(
-                title = title,
-                content = trimmed,
-                colorTheme = null,
-                cardType = cardType
-            )
-            onCreated(metadata.id)
-        }
-    }
-
     fun updateNoteContent(id: String, newContent: String) {
         allContents[id] = newContent
         _uiState.value = _uiState.value.copy(rawContents = HashMap(allContents))
@@ -172,12 +149,6 @@ class NoteListViewModel(
         }
     }
 
-    fun unarchiveNote(id: String) {
-        viewModelScope.launch {
-            noteRepository.unarchiveNote(id)
-        }
-    }
-
     fun permanentlyDeleteNote(id: String) {
         viewModelScope.launch {
             noteRepository.permanentlyDeleteNote(id)
@@ -187,18 +158,6 @@ class NoteListViewModel(
     fun emptyTrash() {
         viewModelScope.launch {
             noteRepository.permanentlyDeleteAllDeleted()
-        }
-    }
-
-    fun permanentlyDeleteAllArchived() {
-        viewModelScope.launch {
-            noteRepository.permanentlyDeleteAllArchived()
-        }
-    }
-
-    fun archiveNote(id: String) {
-        viewModelScope.launch {
-            noteRepository.toggleArchive(id)
         }
     }
 

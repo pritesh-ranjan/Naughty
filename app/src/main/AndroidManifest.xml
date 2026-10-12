@@ -8,8 +8,6 @@
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
@@ -73,13 +71,15 @@
                 <data android:mimeType="text/plain" />
                 <data android:mimeType="text/*" />
                 <data android:mimeType="image/*" />
+                <data android:mimeType="audio/*" />
             </intent-filter>
 
-            <!-- Receive shared multiple images -->
+            <!-- Receive shared multiple images or audio files -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="image/*" />
+                <data android:mimeType="audio/*" />
             </intent-filter>
         </activity-alias>
 
@@ -103,15 +103,6 @@
                 <data android:mimeType="image/*" />
             </intent-filter>
         </activity>
-
-        <service
-            android:name=".binding.BindingDetectorService"
-            android:exported="false"
-            android:foregroundServiceType="specialUse">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="app_context_monitoring" />
-        </service>
 
         <provider
             android:name="androidx.core.content.FileProvider"

@@ -3,6 +3,7 @@ package com.example.naughty.ui.timeline
 import com.example.naughty.data.local.timeline.StageCategory
 import com.example.naughty.data.local.timeline.TimelineMilestone
 import com.example.naughty.data.local.timeline.TimelineStage
+import androidx.compose.runtime.getValue
 
 data class TrackerProgress(
     val done: Int,

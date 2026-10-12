@@ -120,6 +120,9 @@ Existing Migrations Record:
 * **4 -> 5**: Added `reminderTime INTEGER DEFAULT NULL` to `note_metadata` (Alarms).
 * **5 -> 6**: Added `isLocked INTEGER NOT NULL DEFAULT 0` to `note_metadata` (Biometric security).
 * **6 -> 7**: Added `timeline_tracker`, `timeline_stage`, `timeline_milestone`, and `timeline_update` tables for multi-task timeline tracking.
+* **7 -> 8**: Added `graph_node`, `graph_edge`, `graph_evidence`, and `recent_notification_log` tables for self-building offline Knowledge Graph.
+* **8 -> 9**: Merged archived notes into Deleted (`isDeleted = 1, isArchived = 0`), purged orphaned app bindings for soft-deleted notes, removed Archive feature across UI, and transitioned to full-screen Settings with home feature tiles.
+* **9 -> 10**: Dropped `graph_node`, `graph_edge`, `graph_evidence`, and `recent_notification_log` tables, removing offline Knowledge Graph feature and dependencies.
 
 ---
 
@@ -129,7 +132,7 @@ Existing Migrations Record:
 App Binding surfaces notes as notifications when a user launches specific third-party applications (e.g., viewing a grocery list inside Instacart, or meeting notes inside Zoom).
 
 * **Detection Component**: `BindingDetector.kt`.
-* **Mechanism**: Uses `UsageStatsManager.queryEvents` polled on `Dispatchers.IO` once every second. Screen state is verified via `PowerManager.isInteractive` to halt polling when device is asleep.
+* **Mechanism**: Uses `UsageStatsManager.queryEvents` polled on `Dispatchers.IO` once every second directly in `NaughtyApp.appScope`. Screen state is verified via `PowerManager.isInteractive` to halt polling when device is asleep (no battery-draining Android foreground service required).
 * **Required Permission**: `android.permission.PACKAGE_USAGE_STATS`. Handled gracefully in UI through `PermissionGate.kt`.
 * **Binding Types**:
   * `PERSISTENT`: Triggers notification whenever target app comes to foreground.
@@ -146,7 +149,7 @@ The note editor supports two concurrent views:
 1. **Block Mode**: Deconstructs markdown into structured interactive UI blocks (`EditorBlock.Text` and `EditorBlock.Checklist`).
    * Tapping Enter on an empty checklist item exits to a normal text line.
    * Checklists support toggling, reordering, inline reminders, and image attachments.
-2. **Raw Markdown Mode**: Direct full-text markdown editing with live Markwon preview toggle.
+2. **Raw Markdown Mode**: Direct full-text markdown editing for rapid note editing and full markdown control.
 
 **Inline Reminders**:
 * Syntax: `[🔔 Custom Label](reminder:<timestampMillis>)`.
@@ -194,10 +197,11 @@ Direct creation of notes from any third-party app via the Android system share s
   * `Intent.ACTION_SEND` (`text/plain`, `text/*`): Text snippets, paragraphs, web links, URLs.
   * `Intent.ACTION_SEND` (`image/*`): Single image sharing from Gallery, Photos, Browser, or Files.
   * `Intent.ACTION_SEND_MULTIPLE` (`image/*`): Batch image sharing.
+  * `Intent.ACTION_SEND` (`audio/*`) & `Intent.ACTION_SEND_MULTIPLE` (`audio/*`): Audio voice notes and recordings.
   * `Intent.ACTION_PROCESS_TEXT` (`text/plain`): Directly accessible from the OS floating text selection context menu ("Add to Naughty").
-* **Offline-First Image Ingestion**:
-  * Incoming streams are immediately copied to `context.filesDir/note_images/` (`img_<timestamp>_<uuid>.<ext>`) to prevent temporary content URI expiration.
-  * Formatted as native markdown attachments (`![Image](file://...)`), instantly rendering across `AttachedImageThumbnail`, full-screen viewer, and note cards.
+* **Offline-First Content Ingestion**:
+  * Incoming image streams are immediately copied to `context.filesDir/note_images/` (`img_<timestamp>_<uuid>.<ext>`).
+  * Incoming audio streams are copied to `context.filesDir/note_audio/` (`audio_<timestamp>_<uuid>.<ext>`).
 * **Intelligent Title & Card Formatting**:
   * `ShareIntentHandler.kt` cleans leading markdown headers, bullets, and checkboxes from raw text for clean card titles.
   * URLs without explicit subjects are smartly parsed to domain and page slugs (e.g. `github.com • linux`).
@@ -205,30 +209,41 @@ Direct creation of notes from any third-party app via the Android system share s
 * **Interactive Image Share Options (`ShareImageOptionSheet.kt`)**:
   * Sharing image(s) surfaces a dedicated modal bottom sheet with thumbnail previews and 3 actions:
     1. **Attach Image**: Creates note with image markdown attachments.
-    2. **Extract Text (OCR)**: Scans image on-device with ML Kit (`ImageTextExtractor`) to transcribe recognized text directly into a text note (with automatic fallback to attaching the image if no text is detected).
+    2. **Extract Text (OCR)**: Scans image on-device with ML Kit (`ImageTextExtractor`) to transcribe recognized text directly into a text note.
     3. **Both (Image & OCR Text)**: Transcribes recognized text and appends the attached image markdown below it.
+* **Interactive Audio Share Options (`ShareAudioOptionSheet.kt`)**:
+  * Sharing audio surfaces a dedicated modal bottom sheet with 3 actions:
+    1. **Attach Voice Note**: Attaches shared audio directly with playable waveform player.
+    2. **Transcribe Audio**: Transcribes speech offline on-device to text note without storing audio.
+    3. **Both (Audio & Transcript)**: Attaches playable voice note and appends transcription text.
 * **Instant Routing**:
   * `MainActivity` (`launchMode="singleTask"`) ingests content asynchronously on `Dispatchers.IO`, posts visual Toast confirmation, and pushes `NoteEditorKey(newNoteId)` onto Navigation 3's back stack with automatic `PermissionGate` bypass.
 
 ### 4.7 Voice Notes, Audx Neural Noise Suppression & Direct Opus Encoding Subsystem
 High-fidelity on-device voice recording with neural noise reduction and WhatsApp-style interactive playback:
-* **Audio Capture Engine**:
-  * Uses Android `AudioRecord` capturing raw 16-bit PCM at 48,000 Hz. Mono preferred; stereo automatically downmixed `(L + R) / 2` to mono.
-  * Audio source dynamically selects `AudioSource.UNPROCESSED` if supported by device hardware, falling back to `AudioSource.VOICE_RECOGNITION`.
+* **Audio Capture Engine & Decoupled Architecture**:
+  * Uses Android `AudioRecord` capturing raw 16-bit PCM at 48,000 Hz. Buffer allocated to `>= 1 second` headroom (`maxOf(minBufferSize * 8, SAMPLE_RATE * 2)`) to prevent kernel overflow.
+  * Capture thread (`AudxAudioRecordThread`, `THREAD_PRIORITY_URGENT_AUDIO`) runs independently of compression, enqueuing raw/denoised PCM into a thread-safe `LinkedBlockingQueue<ShortArray>`.
+  * Dedicated encoding worker thread (`OpusEncoderWorkerThread`, `THREAD_PRIORITY_AUDIO`) consumes frames and feeds `OpusMediaCodecEncoder` with non-blocking polling, completely eliminating audio crackling and dropped frames.
   * Hardware platform `NoiseSuppressor` is explicitly disabled (`NoiseSuppressor.setEnabled(false)`) to prevent double-processing artifacts.
 * **Audx Neural Noise Suppression**:
-  * Integrates `audx-android` (RNNoise neural network model) operating on continuous 10-ms frames (480 samples/channel) with reusable buffers on a dedicated `THREAD_PRIORITY_URGENT_AUDIO` worker thread.
+  * Integrates `audx-android` (RNNoise neural network model) operating on continuous 10-ms frames (480 samples/channel) with reusable buffers on the capture thread.
   * **Real-Time Toggle**: Mid-recording toggle pill (`[✨ AI Denoise: ON/OFF]`) switches seamlessly between neural denoising and raw microphone audio on a per-frame basis without restarting the stream.
 * **Direct Opus Streaming & Zero WAV Overhead**:
-  * Raw cleaned PCM chunks are continuously encoded by Android's native `MediaCodec` Opus encoder (`audio/opus`, 48 kHz, 32 kbps).
+  * Raw cleaned PCM chunks grouped into standard 20-ms Opus frames (960 samples) and continuously encoded by Android's native `MediaCodec` Opus encoder (`audio/opus`, 48 kHz, 32 kbps).
   * Direct multiplexing into an Ogg container via `MediaMuxer` (`MUXER_OUTPUT_OGG` on API 29+; RFC 7845 packet writer fallback on older APIs), saving directly as `.opus` in `context.filesDir/note_audio/` with zero intermediate WAV files.
-* **Waveform Visualization & Playback**:
-  * Normalized RMS amplitude vectors saved alongside as `.wf` metadata for instant waveform rendering without audio pre-decoding.
-  * WhatsApp-style waveform player (`VoiceNotePlayer.kt`) supporting interactive tap/drag scrubbing, 1x/1.5x/2x playback speed cycling, deletion, and note attachment.
-* **Offline Voice-to-Text Dictation**:
-  * Transcribes speech 100% on-device using Android `SpeechRecognizer` (`SpeechTranscriptionHelper.kt`), expandable under the player card with one-tap copy and markdown note insertion.
+* **Prominent Waveform Visualization & Playback**:
+  * Dynamic root-scaled amplitude vectors (`sqrt(rms / 2500f)`) saved alongside as `.wf` metadata for high-contrast waveform rendering.
+  * WhatsApp-style waveform player (`VoiceNotePlayer.kt`) supporting interactive tap/drag scrubbing, 1x/1.5x/2x playback speed cycling, deletion, external sharing via `FileProvider`, and note attachment.
+  * Mini waveform badge (`VoiceNoteCardBadge`) with duration and 18-bar soundwave on note cards.
+* **Offline Voice-to-Text Dictation & File Transcription**:
+  * Simultaneous live transcription during recording automatically saved alongside audio as `.txt`.
+  * Audio file transcription using `MediaExtractor` and PCM decoding stream via `ParcelFileDescriptor` pipe on Android 13+.
+  * Watchdog timer and error handling prevent infinite loading states.
 * **App Launcher Shortcuts**:
   * `res/xml/shortcuts.xml` defines launcher quick actions for Instant Note Creation (`action_new_note`) and Timeline Tasks (`action_timeline`).
+
+
 
 ---
 
@@ -241,8 +256,7 @@ app/src/main/java/com/example/naughty/
 ├── NaughtyApp.kt                  # Application class; launches background observers
 ├── ShareCopyTextActivity.kt       # Floating context menu "Add to Naughty"
 ├── binding/                       # App binding detection engine
-│   ├── BindingDetector.kt         # UsageStats polling loop
-│   ├── BindingDetectorService.kt  # Legacy background service compatibility
+│   ├── BindingDetector.kt         # UsageStats polling loop in application scope
 │   └── BindingEvent.kt            # Foreground change event definitions
 ├── data/
 │   ├── file/
@@ -252,7 +266,7 @@ app/src/main/java/com/example/naughty/
 │   │   ├── AppBindingDao.kt
 │   │   ├── AppDatabase.kt         # Room DB definition
 │   │   ├── Converters.kt
-│   │   ├── NoteMetadata.kt        # Note entity (pins, archive, trash, lock)
+│   │   ├── NoteMetadata.kt        # Note entity (pins, trash, lock, theme, cardType)
 │   │   ├── NoteMetadataDao.kt
 │   │   └── timeline/              # Room entities & DAO for Timeline
 │   │       ├── TimelineDao.kt
@@ -271,17 +285,15 @@ app/src/main/java/com/example/naughty/
 │   │   ├── FullscreenImageViewer.kt
 │   │   ├── PaperBackground.kt     # Grid, dot, and ruled canvas paper renderer
 │   │   ├── PermissionGate.kt      # Usage stats permission request UI
-│   │   ├── SettingsDialog.kt      # Drawer with trash, archive, theme picker, specs & permissions
+│   │   ├── ShareAudioOptionSheet.kt # Audio share modal sheet (Attach, Transcribe, Both)
 │   │   ├── ShareImageOptionSheet.kt # Image share modal sheet (Image, OCR, Both)
-│   │   ├── SwipeableNoteItem.kt   # AnchoredDraggable swipe actions
-│   │   ├── ThemeToggle.kt
 │   │   ├── UniversalSearchOverlay.kt # Quick search with biometric gating
 │   │   ├── VoiceNotePlayer.kt     # WhatsApp-style scrubber, speed toggle & transcript
 │   │   └── VoiceRecordingSheet.kt # Live AudioRecord + Audx toggle recording bottom sheet
 │   ├── editor/                    # Note editing suite
+│   │   ├── BulletTextHelper.kt    # Automatic bullet and checkbox list indentation
 │   │   ├── EditorBlock.kt         # Block parser & markdown serializer
 │   │   ├── InlineReminderParser.kt# [🔔 ...](reminder:...) regex parser
-│   │   ├── MarkdownPreview.kt     # Markwon preview integration
 │   │   ├── NoteEditorScreen.kt    # Main editor Compose layout
 │   │   ├── NoteEditorViewModel.kt # State management, undo/redo, auto-save
 │   │   ├── ReminderBottomSheet.kt
@@ -289,9 +301,14 @@ app/src/main/java/com/example/naughty/
 │   ├── navigation/
 │   │   └── NavGraph.kt            # Navigation 3 route definitions
 │   ├── notelist/                  # Main notes grid / list
+│   │   ├── HomeFeatureTiles.kt    # Pinned quick access banner for Timeline tasks
 │   │   ├── NoteCard.kt            # Themed note preview card with thumbnail & voice mic icon
-│   │   ├── NoteListScreen.kt      # Floating dock, filter tabs, quick jot
+│   │   ├── NoteListScreen.kt      # Floating dock, filter tabs, search trigger
 │   │   └── NoteListViewModel.kt
+│   ├── settings/                  # Full-screen Settings & configuration
+│   │   ├── SettingsComponents.kt  # Theme preview cards & about dialog
+│   │   ├── SettingsScreen.kt      # General, appearance, and maintenance settings
+│   │   └── SettingsViewModel.kt
 │   ├── theme/                     # Color palettes, typography, theme registry
 │   └── timeline/                  # Timeline task management suite
 │       ├── TimelineColors.kt

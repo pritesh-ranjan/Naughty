@@ -3,7 +3,6 @@ package com.example.naughty.util
 import android.annotation.SuppressLint
 import android.content.Context
 import android.media.AudioFormat
-import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.media.audiofx.NoiseSuppressor
@@ -44,16 +43,17 @@ class AudioRecorderHelper(private val context: Context) {
         private const val TAG = "AudioRecorderHelper"
         const val SAMPLE_RATE = 48000
         const val FRAME_SIZE_SAMPLES = 480 // 10 ms at 48 kHz
+        const val OPUS_FRAME_SAMPLES = 960 // 20 ms at 48 kHz
         private const val TARGET_BARS = 40
 
         fun normalizeAmplitudes(samples: List<Float>, targetCount: Int = TARGET_BARS): List<Float> {
             if (samples.isEmpty()) {
-                return List(targetCount) { 0.15f }
+                return List(targetCount) { 0.18f }
             }
             if (samples.size <= targetCount) {
                 val padded = samples.toMutableList()
                 while (padded.size < targetCount) {
-                    padded.add(0.08f)
+                    padded.add(0.12f)
                 }
                 return padded
             }
@@ -64,8 +64,8 @@ class AudioRecorderHelper(private val context: Context) {
                 val startIdx = (i * chunkSize).toInt().coerceIn(0, samples.size - 1)
                 val endIdx = ((i + 1) * chunkSize).toInt().coerceIn(startIdx + 1, samples.size)
                 val subList = samples.subList(startIdx, endIdx)
-                val avg = if (subList.isNotEmpty()) subList.maxOrNull() ?: 0.1f else 0.1f
-                result.add(avg.coerceIn(0.06f, 1.0f))
+                val peak = if (subList.isNotEmpty()) subList.maxOrNull() ?: 0.15f else 0.15f
+                result.add(peak.coerceIn(0.12f, 1.0f))
             }
             return result
         }
@@ -119,6 +119,8 @@ class AudioRecorderHelper(private val context: Context) {
     private var audxInstance: Audx? = null
     private var opusEncoder: OpusMediaCodecEncoder? = null
     private var workerThread: Thread? = null
+    private var encoderThread: Thread? = null
+    private val pcmQueue = java.util.concurrent.LinkedBlockingQueue<ShortArray>(64)
 
     private val isRecordingRunning = AtomicBoolean(false)
     private val isPausedAtomic = AtomicBoolean(false)
@@ -135,7 +137,7 @@ class AudioRecorderHelper(private val context: Context) {
     private val _isNoiseSuppressionEnabled = MutableStateFlow(true)
     val isNoiseSuppressionEnabled: StateFlow<Boolean> = _isNoiseSuppressionEnabled.asStateFlow()
 
-    private val _currentAmplitude = MutableStateFlow(0.05f)
+    private val _currentAmplitude = MutableStateFlow(0.12f)
     val currentAmplitude: StateFlow<Float> = _currentAmplitude.asStateFlow()
 
     private val _liveAmplitudes = MutableStateFlow<List<Float>>(emptyList())
@@ -162,23 +164,19 @@ class AudioRecorderHelper(private val context: Context) {
         val outputFile = File(audioDir, "audio_${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(6)}.opus")
         currentOutputFile = outputFile
 
+        pcmQueue.clear()
         rawAmplitudes.clear()
         _liveAmplitudes.value = emptyList()
         _elapsedMillis.value = 0L
+        _currentAmplitude.value = 0.12f
         totalRecordedDuration = 0L
         isPausedAtomic.set(false)
         isRecordingRunning.set(true)
 
-        // 1. Choose optimal audio source: UNPROCESSED if supported, else VOICE_RECOGNITION
-        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
-        val supportsUnprocessed = audioManager?.getProperty(AudioManager.PROPERTY_SUPPORT_AUDIO_SOURCE_UNPROCESSED) == "true"
-        val audioSource = if (supportsUnprocessed) {
-            MediaRecorder.AudioSource.UNPROCESSED
-        } else {
-            MediaRecorder.AudioSource.VOICE_RECOGNITION
-        }
+        // 1. Choose optimal audio source: VOICE_RECOGNITION provides stable hardware AGC & voice tuning
+        val audioSource = MediaRecorder.AudioSource.VOICE_RECOGNITION
 
-        // 2. Configure AudioRecord (Prefer Mono, fallback to Stereo)
+        // 2. Configure AudioRecord with generous buffer (at least 1 second headroom)
         var channelConfig = AudioFormat.CHANNEL_IN_MONO
         var isStereo = false
         var minBufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, channelConfig, AudioFormat.ENCODING_PCM_16BIT)
@@ -189,7 +187,7 @@ class AudioRecorderHelper(private val context: Context) {
             minBufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, channelConfig, AudioFormat.ENCODING_PCM_16BIT)
         }
 
-        val bufferSize = maxOf(minBufferSize, FRAME_SIZE_SAMPLES * (if (isStereo) 2 else 1) * 4)
+        val bufferSize = maxOf(minBufferSize * 8, SAMPLE_RATE * 2)
 
         val record = AudioRecord(
             audioSource,
@@ -218,11 +216,11 @@ class AudioRecorderHelper(private val context: Context) {
                 .resampleQuality(Audx.AUDX_RESAMPLER_QUALITY_VOIP)
                 .build()
         } catch (e: Exception) {
-            Log.e(TAG, "Audx initialization error, falling back to uncompressed passthrough", e)
+            Log.e(TAG, "Audx initialization error, falling back to passthrough", e)
             null
         }
 
-        // 5. Initialize Opus MediaCodec Encoder
+        // 5. Initialize Opus MediaCodec Encoder (standard 20 ms frames)
         opusEncoder = OpusMediaCodecEncoder(
             outputFile = outputFile,
             sampleRate = SAMPLE_RATE,
@@ -234,14 +232,15 @@ class AudioRecorderHelper(private val context: Context) {
         recordingStartTime = System.currentTimeMillis()
         _isRecording.value = true
 
-        // 6. Launch high-priority dedicated worker thread
-        startWorkerThread(record, isStereo)
+        // 6. Launch independent producer (capture) and consumer (encoder) threads
+        startEncoderThread()
+        startCaptureThread(record, isStereo)
         startTimerJob()
 
         return outputFile
     }
 
-    private fun startWorkerThread(record: AudioRecord, isStereo: Boolean) {
+    private fun startCaptureThread(record: AudioRecord, isStereo: Boolean) {
         workerThread = Thread({
             Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO)
 
@@ -249,6 +248,9 @@ class AudioRecorderHelper(private val context: Context) {
             val monoInputShorts = ShortArray(FRAME_SIZE_SAMPLES)
             val processedShorts = ShortArray(FRAME_SIZE_SAMPLES)
 
+            // Accumulator for 20 ms Opus frames (960 samples)
+            val opusFrameBuffer = ShortArray(OPUS_FRAME_SAMPLES)
+            var opusBufferOffset = 0
             var amplitudeUpdateCounter = 0
 
             while (isRecordingRunning.get()) {
@@ -285,9 +287,7 @@ class AudioRecorderHelper(private val context: Context) {
                 val audx = audxInstance
                 if (isDenoiseActive && audx != null && !audx.isClosed()) {
                     try {
-                        audx.process(monoInputShorts, processedShorts) { vadProb ->
-                            // Voice Activity Detection callback
-                        }
+                        audx.process(monoInputShorts, processedShorts) { _ -> }
                     } catch (e: Exception) {
                         System.arraycopy(monoInputShorts, 0, processedShorts, 0, FRAME_SIZE_SAMPLES)
                     }
@@ -295,29 +295,68 @@ class AudioRecorderHelper(private val context: Context) {
                     System.arraycopy(monoInputShorts, 0, processedShorts, 0, FRAME_SIZE_SAMPLES)
                 }
 
-                // Calculate amplitude from processed frame
+                // Calculate responsive amplitude with root-power scaling
                 amplitudeUpdateCounter++
-                if (amplitudeUpdateCounter % 4 == 0) { // update ~ every 40 ms
+                if (amplitudeUpdateCounter % 4 == 0) { // ~ every 40 ms
                     var sumSquares = 0.0
                     for (sample in processedShorts) {
                         sumSquares += sample.toDouble() * sample.toDouble()
                     }
                     val rms = sqrt(sumSquares / FRAME_SIZE_SAMPLES).toFloat()
-                    val normalized = (rms / 9000f).coerceIn(0.05f, 1.0f)
+                    val normalized = (sqrt((rms / 2500f).coerceIn(0f, 1f))).coerceIn(0.12f, 1.0f)
 
                     _currentAmplitude.value = normalized
                     synchronized(rawAmplitudes) {
                         rawAmplitudes.add(normalized)
-                        _liveAmplitudes.value = rawAmplitudes.takeLast(50)
+                        _liveAmplitudes.value = rawAmplitudes.takeLast(45)
                     }
                 }
 
-                // Send clean PCM frame to Opus MediaCodec Encoder if not paused
+                // Accumulate two 10 ms frames into one 20 ms (960-sample) Opus frame
                 if (!isPausedAtomic.get()) {
-                    opusEncoder?.encodePcm(processedShorts, 0, FRAME_SIZE_SAMPLES)
+                    System.arraycopy(processedShorts, 0, opusFrameBuffer, opusBufferOffset, FRAME_SIZE_SAMPLES)
+                    opusBufferOffset += FRAME_SIZE_SAMPLES
+
+                    if (opusBufferOffset >= OPUS_FRAME_SAMPLES) {
+                        val chunkCopy = opusFrameBuffer.clone()
+                        pcmQueue.offer(chunkCopy)
+                        opusBufferOffset = 0
+                    }
+                } else {
+                    opusBufferOffset = 0
                 }
             }
+
+            // Flush any remaining accumulated samples
+            if (opusBufferOffset > 0 && !isPausedAtomic.get()) {
+                val partialChunk = ShortArray(opusBufferOffset)
+                System.arraycopy(opusFrameBuffer, 0, partialChunk, 0, opusBufferOffset)
+                pcmQueue.offer(partialChunk)
+            }
         }, "AudxAudioRecordThread").apply { start() }
+    }
+
+    private fun startEncoderThread() {
+        encoderThread = Thread({
+            Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO)
+
+            while (isRecordingRunning.get() || pcmQueue.isNotEmpty()) {
+                val chunk = try {
+                    pcmQueue.poll(50, java.util.concurrent.TimeUnit.MILLISECONDS)
+                } catch (_: InterruptedException) {
+                    null
+                }
+
+                if (chunk != null) {
+                    if (chunk.isEmpty()) {
+                        break // End-of-stream marker
+                    }
+                    if (!isPausedAtomic.get()) {
+                        opusEncoder?.encodePcm(chunk, 0, chunk.size)
+                    }
+                }
+            }
+        }, "OpusEncoderWorkerThread").apply { start() }
     }
 
     private fun startTimerJob() {
@@ -358,7 +397,7 @@ class AudioRecorderHelper(private val context: Context) {
             totalRecordedDuration + (System.currentTimeMillis() - recordingStartTime)
         }
 
-        // Wait for worker thread to exit cleanly
+        // Wait for capture thread to exit cleanly
         try {
             workerThread?.join(500)
         } catch (_: Exception) {}
@@ -372,6 +411,13 @@ class AudioRecorderHelper(private val context: Context) {
             audioRecord?.release()
         } catch (_: Exception) {}
         audioRecord = null
+
+        // Signal EOS marker to encoder queue and join encoder thread
+        pcmQueue.offer(ShortArray(0))
+        try {
+            encoderThread?.join(600)
+        } catch (_: Exception) {}
+        encoderThread = null
 
         // Release hardware noise suppressor
         try {
@@ -421,6 +467,13 @@ class AudioRecorderHelper(private val context: Context) {
             audioRecord?.release()
         } catch (_: Exception) {}
         audioRecord = null
+
+        pcmQueue.clear()
+        pcmQueue.offer(ShortArray(0))
+        try {
+            encoderThread?.join(500)
+        } catch (_: Exception) {}
+        encoderThread = null
 
         try {
             noiseSuppressor?.release()

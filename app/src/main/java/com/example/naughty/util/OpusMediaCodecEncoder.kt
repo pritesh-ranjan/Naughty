@@ -10,6 +10,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import androidx.compose.runtime.getValue
 
 /**
  * High-performance, streaming Opus audio encoder and Ogg muxer.
@@ -32,8 +33,9 @@ class OpusMediaCodecEncoder(
     companion object {
         private const val TAG = "OpusEncoder"
         private const val MIME_TYPE = "audio/opus"
-        private const val TIMEOUT_US = 10_000L // 10 ms poll timeout
-        private const val SAMPLES_PER_FRAME = 480 // 10 ms at 48 kHz
+        private const val TIMEOUT_EOS_US = 10_000L
+        private const val TIMEOUT_INPUT_US = 2_000L
+        const val SAMPLES_PER_FRAME = 960 // 20 ms at 48 kHz (Opus standard)
     }
 
     private var codec: MediaCodec? = null
@@ -71,7 +73,7 @@ class OpusMediaCodecEncoder(
 
     /**
      * Feeds 16-bit PCM audio samples into the Opus encoder.
-     * Samples are queued in 480-sample chunks (10 ms) with accurate presentation timestamps.
+     * Samples are queued in 960-sample chunks (20 ms) with accurate presentation timestamps.
      */
     fun encodePcm(pcmShorts: ShortArray, offset: Int = 0, length: Int = pcmShorts.size) {
         val activeCodec = codec ?: return
@@ -82,7 +84,7 @@ class OpusMediaCodecEncoder(
 
         while (remaining > 0) {
             val chunkCount = minOf(remaining, SAMPLES_PER_FRAME)
-            val inputBufferIndex = activeCodec.dequeueInputBuffer(TIMEOUT_US)
+            val inputBufferIndex = activeCodec.dequeueInputBuffer(TIMEOUT_INPUT_US)
             if (inputBufferIndex >= 0) {
                 val inputBuffer = activeCodec.getInputBuffer(inputBufferIndex)
                 if (inputBuffer != null) {
@@ -105,6 +107,10 @@ class OpusMediaCodecEncoder(
                 }
                 currentOffset += chunkCount
                 remaining -= chunkCount
+            } else {
+                // If input buffer is temporarily full, yield slightly and drain
+                drainEncoder(endOfStream = false)
+                break
             }
 
             drainEncoder(endOfStream = false)
@@ -113,13 +119,16 @@ class OpusMediaCodecEncoder(
 
     /**
      * Drains pending encoded Opus packets from MediaCodec and writes them to the muxer.
+     * During active streaming, poll timeout is 0L (non-blocking) so capture is never stalled.
      */
     private fun drainEncoder(endOfStream: Boolean) {
         val activeCodec = codec ?: return
         if (isReleased) return
 
+        val pollTimeout = if (endOfStream) TIMEOUT_EOS_US else 0L
+
         while (true) {
-            val outputBufferIndex = activeCodec.dequeueOutputBuffer(bufferInfo, TIMEOUT_US)
+            val outputBufferIndex = activeCodec.dequeueOutputBuffer(bufferInfo, pollTimeout)
             when {
                 outputBufferIndex == MediaCodec.INFO_TRY_AGAIN_LATER -> {
                     if (!endOfStream) break
@@ -178,7 +187,7 @@ class OpusMediaCodecEncoder(
         if (activeCodec != null) {
             try {
                 // Queue EOS
-                val inputBufferIndex = activeCodec.dequeueInputBuffer(TIMEOUT_US)
+                val inputBufferIndex = activeCodec.dequeueInputBuffer(TIMEOUT_EOS_US)
                 if (inputBufferIndex >= 0) {
                     activeCodec.queueInputBuffer(
                         inputBufferIndex,

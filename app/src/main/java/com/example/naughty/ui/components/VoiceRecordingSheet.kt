@@ -7,14 +7,11 @@ import android.provider.Settings
 import android.speech.SpeechRecognizer
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -35,7 +32,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -45,9 +41,9 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.CloudDownload
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Mic
-import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.WarningAmber
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -61,19 +57,17 @@ import androidx.compose.material3.TabRow
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -86,7 +80,6 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.example.naughty.ui.theme.AmoledBlack
 import com.example.naughty.ui.theme.CrystalWhite
-import com.example.naughty.ui.theme.ElectricCyan
 import com.example.naughty.ui.theme.ElectricGreen
 import com.example.naughty.ui.theme.isAppInDarkTheme
 import com.example.naughty.util.AudioRecordResult
@@ -94,6 +87,8 @@ import com.example.naughty.util.AudioRecorderHelper
 import com.example.naughty.util.SpeechTranscriptionHelper
 import java.io.File
 import java.util.Locale
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -295,27 +290,62 @@ fun VoiceRecordingSheet(
                         voiceNoteTranscript = null
                         isPaused = false
                         audioRecorder.startRecording()
+                        transcriptionHelper.startListening(
+                            onPartial = { text -> voiceNoteTranscript = text },
+                            onFinal = { text -> voiceNoteTranscript = text },
+                            onError = { _ -> }
+                        )
                     },
                     onPause = {
                         isPaused = true
                         audioRecorder.pauseRecording()
+                        transcriptionHelper.stopListening()
                     },
                     onResume = {
                         isPaused = false
                         audioRecorder.resumeRecording()
+                        val previousText = voiceNoteTranscript.orEmpty()
+                        transcriptionHelper.startListening(
+                            onPartial = { text ->
+                                voiceNoteTranscript = if (previousText.isNotBlank()) "$previousText $text" else text
+                            },
+                            onFinal = { text ->
+                                voiceNoteTranscript = if (previousText.isNotBlank()) "$previousText $text" else text
+                            },
+                            onError = { _ -> }
+                        )
                     },
                     onFinish = {
                         val result = audioRecorder.stopRecording()
+                        transcriptionHelper.stopListening()
+                        if (result != null) {
+                            if (!voiceNoteTranscript.isNullOrBlank()) {
+                                AudioRecorderHelper.saveTranscript(result.file, voiceNoteTranscript!!)
+                            } else {
+                                val bgHelper = SpeechTranscriptionHelper(context)
+                                bgHelper.transcribeAudioFile(
+                                    audioFile = result.file,
+                                    onFinal = { text ->
+                                        voiceNoteTranscript = text
+                                        AudioRecorderHelper.saveTranscript(result.file, text)
+                                        bgHelper.destroy()
+                                    },
+                                    onError = { _ -> bgHelper.destroy() }
+                                )
+                            }
+                        }
                         recordedResult = result
                     },
                     onDiscard = {
                         audioRecorder.cancelRecording()
+                        transcriptionHelper.stopListening()
                         recordedResult = null
                         voiceNoteTranscript = null
                     },
                     onSave = {
                         recordedResult?.let { res ->
-                            onSaveVoiceNote(res.file, voiceNoteTranscript)
+                            val finalTranscript = voiceNoteTranscript ?: AudioRecorderHelper.readTranscript(res.file)
+                            onSaveVoiceNote(res.file, finalTranscript)
                             onDismiss()
                         }
                     }
@@ -359,6 +389,7 @@ private fun VoiceNoteRecordingSection(
 ) {
     val isDark = isAppInDarkTheme()
     val isDenoiseEnabled by audioRecorder.isNoiseSuppressionEnabled.collectAsState()
+    var showDiscardConfirmDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -391,7 +422,7 @@ private fun VoiceNoteRecordingSection(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Button(
-                    onClick = onDiscard,
+                    onClick = { showDiscardConfirmDialog = true },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = if (isDark) Color(0xFF27272A) else Color(0xFFE4E4E7)
                     ),
@@ -576,28 +607,36 @@ private fun VoiceNoteRecordingSection(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .height(64.dp)
+                    .clip(RoundedCornerShape(16.dp))
                     .background(if (isDark) Color(0xFF18181B) else Color(0xFFF4F4F5))
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                    .border(
+                        BorderStroke(
+                            0.6.dp,
+                            if (isDark) Color(0xFF27272A) else Color(0xFFE4E4E7)
+                        ),
+                        RoundedCornerShape(16.dp)
+                    )
+                    .padding(horizontal = 14.dp, vertical = 6.dp)
             ) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
-                    val count = 40
+                    val count = 38
                     val samples = liveAmplitudes.takeLast(count)
                     val totalWidth = size.width
                     val totalHeight = size.height
-                    val spacing = 2.5.dp.toPx()
-                    val barWidth = ((totalWidth - (spacing * (count - 1))) / count).coerceAtLeast(2.dp.toPx())
+                    val spacing = 3.dp.toPx()
+                    val barWidth = ((totalWidth - (spacing * (count - 1))) / count).coerceAtLeast(2.5.dp.toPx())
 
                     for (i in 0 until count) {
                         val barX = i * (barWidth + spacing)
                         val sampleIdx = samples.size - count + i
-                        val amplitude = if (sampleIdx >= 0 && sampleIdx < samples.size) samples[sampleIdx] else 0.08f
-                        val barHeight = (totalHeight * amplitude * 0.9f).coerceAtLeast(4.dp.toPx())
+                        val amplitude = if (sampleIdx >= 0 && sampleIdx < samples.size) samples[sampleIdx] else 0.12f
+                        val scaledAmp = kotlin.math.sqrt(amplitude.coerceIn(0f, 1f))
+                        val barHeight = (totalHeight * scaledAmp * 0.92f).coerceIn(6.dp.toPx(), totalHeight)
                         val barY = (totalHeight - barHeight) / 2f
 
                         drawRoundRect(
-                            color = if (isPaused) Color.Gray else accentColor,
+                            color = if (isPaused) (if (isDark) Color(0xFF52525B) else Color(0xFFA1A1AA)) else accentColor,
                             topLeft = Offset(barX, barY),
                             size = Size(barWidth, barHeight),
                             cornerRadius = CornerRadius(barWidth / 2f, barWidth / 2f)
@@ -616,7 +655,13 @@ private fun VoiceNoteRecordingSection(
             ) {
                 // Discard
                 IconButton(
-                    onClick = onDiscard,
+                    onClick = {
+                        if (elapsedMillis > 2000L) {
+                            showDiscardConfirmDialog = true
+                        } else {
+                            onDiscard()
+                        }
+                    },
                     modifier = Modifier
                         .size(46.dp)
                         .clip(CircleShape)
@@ -669,6 +714,40 @@ private fun VoiceNoteRecordingSection(
                 }
             }
         }
+    }
+
+    if (showDiscardConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showDiscardConfirmDialog = false },
+            title = {
+                Text(
+                    text = "Discard Recording?",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+            },
+            text = {
+                Text("Are you sure you want to discard this voice recording?")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDiscardConfirmDialog = false
+                        onDiscard()
+                    },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("Discard")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDiscardConfirmDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 

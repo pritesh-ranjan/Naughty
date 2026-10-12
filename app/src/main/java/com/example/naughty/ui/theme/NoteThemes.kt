@@ -2,6 +2,7 @@ package com.example.naughty.ui.theme
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.runtime.getValue
 
 enum class PaperPattern {
     NONE,
