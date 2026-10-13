@@ -1,13 +1,14 @@
 package com.example.naughty.ui.notelist
 
-import android.graphics.BitmapFactory
-import android.media.MediaMetadataRetriever
 import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.request.crossfade
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -638,31 +639,15 @@ fun AttachedImageThumbnail(
     contentScale: ContentScale = ContentScale.Crop
 ) {
     val context = LocalContext.current
-    val bitmap = remember(imageRef) {
-        try {
-            if (imageRef.startsWith("content://") || imageRef.startsWith("file://")) {
-                val uri = Uri.parse(imageRef)
-                context.contentResolver.openInputStream(uri)?.use { stream ->
-                    BitmapFactory.decodeStream(stream)?.asImageBitmap()
-                }
-            } else if (imageRef.startsWith("/")) {
-                BitmapFactory.decodeFile(imageRef)?.asImageBitmap()
-            } else {
-                null
-            }
-        } catch (_: Exception) {
-            null
-        }
-    }
-
-    if (bitmap != null) {
-        Image(
-            bitmap = bitmap,
-            contentDescription = "Attached image",
-            contentScale = contentScale,
-            modifier = modifier
-        )
-    }
+    AsyncImage(
+        model = ImageRequest.Builder(context)
+            .data(imageRef)
+            .crossfade(150)
+            .build(),
+        contentDescription = "Attached image",
+        contentScale = contentScale,
+        modifier = modifier
+    )
 }
 
 private fun isChecklistContent(content: String): Boolean =
@@ -706,23 +691,7 @@ fun VoiceNoteCardBadge(
         AudioRecorderHelper.readWaveform(audioFile, targetCount = 18)
     }
     val durationText = remember(cleanPath) {
-        try {
-            if (audioFile.exists()) {
-                val mmr = MediaMetadataRetriever()
-                mmr.setDataSource(audioFile.absolutePath)
-                val durationStr = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
-                mmr.release()
-                val durMs = durationStr?.toLongOrNull() ?: 0L
-                if (durMs > 0) {
-                    val totalSec = durMs / 1000
-                    val min = totalSec / 60
-                    val sec = totalSec % 60
-                    "%d:%02d".format(Locale.US, min, sec)
-                } else null
-            } else null
-        } catch (_: Exception) {
-            null
-        }
+        AudioRecorderHelper.getAudioDuration(audioFile)
     }
 
     val accent = palette.iconTint

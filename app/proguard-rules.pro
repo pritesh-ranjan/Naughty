@@ -28,3 +28,10 @@
 -keepclasseswithmembernames class com.audx.android.** {
     native <methods>;
 }
+
+# Coil 3 image loading
+-keep class coil3.** { *; }
+-dontwarn coil3.**
+
+# ProfileInstaller
+-dontwarn androidx.profileinstaller.**

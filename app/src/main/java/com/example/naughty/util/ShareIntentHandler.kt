@@ -332,7 +332,10 @@ object ShareIntentHandler {
         return PendingImageShare(uris = uris, subject = subject, text = text)
     }
 
-    fun copyUriToInternalStorage(context: Context, uri: Uri): File? {
+    suspend fun copyUriToInternalStorage(context: Context, uri: Uri): File? {
+        val optimized = ImageOptimizer.optimizeAndSave(context, uri)
+        if (optimized != null) return optimized
+
         return try {
             val imagesDir = File(context.filesDir, "note_images").apply { mkdirs() }
             val mimeType = try {

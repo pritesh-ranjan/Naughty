@@ -256,16 +256,12 @@ fun NoteEditorScreen(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         if (uri != null) {
-            try {
-                val imagesDir = File(context.filesDir, "note_images").apply { mkdirs() }
-                val imageFile = File(imagesDir, "img_${System.currentTimeMillis()}.jpg")
-                context.contentResolver.openInputStream(uri)?.use { input ->
-                    imageFile.outputStream().use { output ->
-                        input.copyTo(output)
-                    }
+            coroutineScope.launch {
+                val optimizedFile = com.example.naughty.util.ImageOptimizer.optimizeAndSave(context, uri)
+                if (optimizedFile != null) {
+                    viewModel.addImage("file://${optimizedFile.absolutePath}")
                 }
-                viewModel.addImage("file://${imageFile.absolutePath}")
-            } catch (_: Exception) {}
+            }
         }
     }
 

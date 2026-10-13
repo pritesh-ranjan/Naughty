@@ -18,6 +18,16 @@ import androidx.fragment.app.FragmentActivity
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import android.widget.Toast
 import androidx.lifecycle.lifecycleScope
 import com.example.naughty.ui.binding.BindingSheet
@@ -370,6 +380,36 @@ fun NaughtyNavigation(
                 if (backStack.size > 1) {
                     backStack.removeLastOrNull()
                 }
+            },
+            transitionSpec = {
+                val enter = slideInHorizontally(
+                    initialOffsetX = { (it * 0.22f).toInt() },
+                    animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)
+                ) + fadeIn(animationSpec = tween(durationMillis = 220, easing = LinearOutSlowInEasing))
+                val exit = slideOutHorizontally(
+                    targetOffsetX = { -(it * 0.12f).toInt() },
+                    animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)
+                ) + fadeOut(animationSpec = tween(durationMillis = 180, easing = FastOutLinearInEasing))
+                enter.togetherWith(exit)
+            },
+            popTransitionSpec = {
+                val enter = slideInHorizontally(
+                    initialOffsetX = { -(it * 0.12f).toInt() },
+                    animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing)
+                ) + fadeIn(animationSpec = tween(durationMillis = 200, easing = LinearOutSlowInEasing))
+                val exit = slideOutHorizontally(
+                    targetOffsetX = { (it * 0.22f).toInt() },
+                    animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing)
+                ) + fadeOut(animationSpec = tween(durationMillis = 180, easing = FastOutLinearInEasing))
+                enter.togetherWith(exit)
+            },
+            predictivePopTransitionSpec = { _ ->
+                val enter = fadeIn(animationSpec = tween(durationMillis = 200))
+                val exit = scaleOut(
+                    targetScale = 0.90f,
+                    animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing)
+                ) + fadeOut(animationSpec = tween(durationMillis = 180))
+                enter.togetherWith(exit)
             },
             entryProvider = entryProvider {
                 entry<NoteListKey> {

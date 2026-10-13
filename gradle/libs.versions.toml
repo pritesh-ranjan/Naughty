@@ -17,6 +17,8 @@ ksp = "2.3.12"
 datastore = "1.1.7"
 mlkitTextRecognition = "16.0.1"
 biometric = "1.2.0-alpha05"
+coil = "3.1.0"
+profileinstaller = "1.4.1"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
@@ -53,6 +55,13 @@ mlkit-text-recognition = { module = "com.google.mlkit:text-recognition", version
 
 # Biometric
 androidx-biometric = { module = "androidx.biometric:biometric", version.ref = "biometric" }
+
+# Coil 3 (offline image loading)
+coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
+coil-core = { module = "io.coil-kt.coil3:coil", version.ref = "coil" }
+
+# Baseline Profiles
+androidx-profileinstaller = { module = "androidx.profileinstaller:profileinstaller", version.ref = "profileinstaller" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "androidGradlePlugin" }

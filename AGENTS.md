@@ -323,6 +323,7 @@ app/src/main/java/com/example/naughty/
 └── util/
     ├── AudioRecorderHelper.kt     # AudioRecord + Audx real-time denoise coordinator
     ├── BiometricAuthHelper.kt     # BiometricPrompt & NoteLockSession
+    ├── ImageOptimizer.kt          # Background downsampling & JPEG compression for attachments
     ├── ImageTextExtractor.kt      # Google ML Kit offline OCR
     ├── OpusMediaCodecEncoder.kt   # Native MediaCodec Opus streaming encoder & Ogg muxer
     ├── ShareIntentHandler.kt      # System share & selection text ingestion

@@ -71,7 +71,8 @@ android {
     buildTypes {
         release {
             isDebuggable = project.findProperty("debuggableRelease") == "true"
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.getByName("release")
         }
@@ -153,4 +154,11 @@ dependencies {
 
   // Audx RNNoise Audio Noise Suppression
   implementation("com.github.rizukirr:audx-android:v3.0.0")
+
+  // Coil 3 (Offline on-device image rendering)
+  implementation(libs.coil.compose)
+  implementation(libs.coil.core)
+
+  // Baseline Profiles
+  implementation(libs.androidx.profileinstaller)
 }

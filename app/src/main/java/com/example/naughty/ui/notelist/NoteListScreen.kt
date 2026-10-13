@@ -132,23 +132,17 @@ fun NoteListScreen(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         if (uri != null) {
-            coroutineScope.launch(Dispatchers.IO) {
-                try {
-                    val imagesDir = File(context.filesDir, "note_images").apply { mkdirs() }
-                    val imageFile = File(imagesDir, "img_${System.currentTimeMillis()}.jpg")
-                    context.contentResolver.openInputStream(uri)?.use { input ->
-                        imageFile.outputStream().use { output ->
-                            input.copyTo(output)
-                        }
-                    }
+            coroutineScope.launch {
+                val optimizedFile = com.example.naughty.util.ImageOptimizer.optimizeAndSave(context, uri)
+                if (optimizedFile != null) {
                     viewModel.createNote(
                         title = "Photo note",
-                        content = "![image](file://${imageFile.absolutePath})\n\n",
+                        content = "![image](file://${optimizedFile.absolutePath})\n\n",
                         cardType = "modular"
                     ) { newNoteId ->
                         onNoteClick(newNoteId)
                     }
-                } catch (_: Exception) {}
+                }
             }
         }
     }
@@ -235,7 +229,7 @@ fun NoteListScreen(
             ) {
                 // Top Feature Tile: Timeline tasks banner (hidden when searching)
                 if (uiState.searchQuery.isBlank()) {
-                    item(key = "home_feature_tiles") {
+                    item(key = "home_feature_tiles", contentType = "feature_tiles") {
                         HomeFeatureTiles(
                             trackerCount = trackerCount,
                             onOpenTimeline = onOpenTimeline,
@@ -245,7 +239,7 @@ fun NoteListScreen(
                 }
 
                 if (uiState.notes.isEmpty() && !uiState.isLoading) {
-                    item(key = "empty_placeholder") {
+                    item(key = "empty_placeholder", contentType = "empty_placeholder") {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -310,7 +304,8 @@ fun NoteListScreen(
                 } else {
                     items(
                         items = uiState.notes,
-                        key = { it.id }
+                        key = { it.id },
+                        contentType = { "note_card" }
                     ) { note ->
                         Box(modifier = Modifier.padding(horizontal = 16.dp)) {
                             NoteCard(
@@ -353,7 +348,7 @@ fun NoteListScreen(
                 }
 
                 // Bottom padding to clear floating capsule and dots
-                item(key = "bottom_spacer") {
+                item(key = "bottom_spacer", contentType = "bottom_spacer") {
                     Spacer(modifier = Modifier.height(140.dp))
                 }
             }

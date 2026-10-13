@@ -70,29 +70,77 @@ class AudioRecorderHelper(private val context: Context) {
             return result
         }
 
+        private class SimpleLruCache<K, V>(private val maxEntries: Int) {
+            private val map = object : LinkedHashMap<K, V>(maxEntries, 0.75f, true) {
+                override fun removeEldestEntry(eldest: MutableMap.MutableEntry<K, V>?): Boolean {
+                    return size > maxEntries
+                }
+            }
+            @Synchronized fun get(key: K): V? = map[key]
+            @Synchronized fun put(key: K, value: V) { map[key] = value }
+            @Synchronized fun clear() { map.clear() }
+        }
+
+        private val waveformCache = SimpleLruCache<String, List<Float>>(128)
+        private val durationCache = SimpleLruCache<String, String>(128)
+
         fun saveWaveform(audioFile: File, amplitudes: List<Float>) {
             try {
+                waveformCache.put("${audioFile.absolutePath}_${amplitudes.size}", amplitudes)
                 val wfFile = File(audioFile.parentFile, "${audioFile.nameWithoutExtension}.wf")
                 wfFile.writeText(amplitudes.joinToString(",") { "%.3f".format(java.util.Locale.US, it) })
             } catch (_: Exception) {}
         }
 
         fun readWaveform(audioFile: File, targetCount: Int = TARGET_BARS): List<Float> {
+            val cacheKey = "${audioFile.absolutePath}_$targetCount"
+            val cached = waveformCache.get(cacheKey)
+            if (cached != null) return cached
+
             try {
                 val wfFile = File(audioFile.parentFile, "${audioFile.nameWithoutExtension}.wf")
                 if (wfFile.exists()) {
                     val content = wfFile.readText()
                     val parsed = content.split(",").mapNotNull { it.trim().toFloatOrNull() }
                     if (parsed.isNotEmpty()) {
-                        return if (parsed.size == targetCount) parsed else normalizeAmplitudes(parsed, targetCount)
+                        val result = if (parsed.size == targetCount) parsed else normalizeAmplitudes(parsed, targetCount)
+                        waveformCache.put(cacheKey, result)
+                        return result
                     }
                 }
             } catch (_: Exception) {}
 
             val seed = audioFile.name.hashCode()
             val rng = java.util.Random(seed.toLong())
-            return List(targetCount) {
+            val fallback = List(targetCount) {
                 (0.12f + rng.nextFloat() * 0.75f).coerceIn(0.08f, 0.95f)
+            }
+            waveformCache.put(cacheKey, fallback)
+            return fallback
+        }
+
+        fun getAudioDuration(audioFile: File): String? {
+            if (!audioFile.exists()) return null
+            val key = audioFile.absolutePath
+            val cached = durationCache.get(key)
+            if (cached != null) return cached
+
+            return try {
+                val mmr = android.media.MediaMetadataRetriever()
+                mmr.setDataSource(audioFile.absolutePath)
+                val durationStr = mmr.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)
+                mmr.release()
+                val durMs = durationStr?.toLongOrNull() ?: 0L
+                if (durMs > 0) {
+                    val totalSec = durMs / 1000
+                    val min = totalSec / 60
+                    val sec = totalSec % 60
+                    val formatted = "%d:%02d".format(java.util.Locale.US, min, sec)
+                    durationCache.put(key, formatted)
+                    formatted
+                } else null
+            } catch (_: Exception) {
+                null
             }
         }
 

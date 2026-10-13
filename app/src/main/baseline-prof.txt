@@ -1,0 +1,54 @@
+# Baseline Profile for Naughty (com.example.naughty)
+# Pre-compiled ahead-of-time (AOT) by Android Runtime (ART) via ProfileInstaller
+
+# Application & Navigation Core
+Lcom/example/naughty/MainActivity;
+Lcom/example/naughty/MainActivityKt;
+Lcom/example/naughty/NaughtyApp;
+Lcom/example/naughty/AppContainer;
+Lcom/example/naughty/ui/navigation/NavGraphKt;
+Lcom/example/naughty/ui/navigation/NoteListKey;
+Lcom/example/naughty/ui/navigation/NoteEditorKey;
+Lcom/example/naughty/ui/navigation/TimelineListKey;
+Lcom/example/naughty/ui/navigation/TimelineDetailKey;
+Lcom/example/naughty/ui/navigation/SettingsKey;
+
+# Compose Navigation 3
+Landroidx/navigation3/ui/NavDisplayKt;
+Landroidx/navigation3/runtime/NavEntry;
+Landroidx/navigation3/runtime/NavBackStack;
+
+# Note List & Rendering Hot Paths
+Lcom/example/naughty/ui/notelist/NoteListScreenKt;
+Lcom/example/naughty/ui/notelist/NoteListViewModel;
+Lcom/example/naughty/ui/notelist/NoteListUiState;
+Lcom/example/naughty/ui/notelist/NoteCardKt;
+Lcom/example/naughty/ui/notelist/HomeFeatureTilesKt;
+
+# Note Editor Screen Hot Paths
+Lcom/example/naughty/ui/editor/NoteEditorScreenKt;
+Lcom/example/naughty/ui/editor/NoteEditorViewModel;
+Lcom/example/naughty/ui/editor/EditorBlock;
+Lcom/example/naughty/ui/editor/EditorBlockParser;
+Lcom/example/naughty/ui/editor/BulletTextHelper;
+Lcom/example/naughty/ui/editor/InlineReminderParser;
+
+# Canvas & Background Optimization
+Lcom/example/naughty/ui/components/PaperBackgroundKt;
+Lcom/example/naughty/ui/theme/NoteThemesKt;
+Lcom/example/naughty/ui/theme/NoteThemeRegistry;
+Lcom/example/naughty/ui/theme/ThemeKt;
+Lcom/example/naughty/ui/theme/ColorKt;
+
+# Media, Audio & Image Optimization
+Lcom/example/naughty/util/ImageOptimizer;
+Lcom/example/naughty/util/AudioRecorderHelper;
+Lcom/example/naughty/util/BiometricAuthHelper;
+Lcoil3/compose/AsyncImageKt;
+Lcoil3/request/ImageRequest;
+
+# Repository & Room Metadata
+Lcom/example/naughty/data/repository/NoteRepository;
+Lcom/example/naughty/data/local/NoteMetadata;
+Lcom/example/naughty/data/local/NoteMetadataDao;
+Lcom/example/naughty/data/local/AppDatabase;
