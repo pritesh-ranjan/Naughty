@@ -3,19 +3,21 @@ package com.example.naughty.ui.components
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.provider.Settings
 import android.speech.SpeechRecognizer
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -100,6 +102,7 @@ fun VoiceRecordingSheet(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val isDark = isAppInDarkTheme()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -113,6 +116,21 @@ fun VoiceRecordingSheet(
                 Manifest.permission.RECORD_AUDIO
             ) == PackageManager.PERMISSION_GRANTED
         )
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                hasAudioPermission = ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.RECORD_AUDIO
+                ) == PackageManager.PERMISSION_GRANTED
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -260,18 +278,37 @@ fun VoiceRecordingSheet(
                         textAlign = TextAlign.Center
                     )
                     Spacer(modifier = Modifier.height(20.dp))
-                    Button(
-                        onClick = {
-                            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = accentColor),
-                        shape = RoundedCornerShape(12.dp)
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "Allow Microphone",
-                            color = if (isDark) AmoledBlack else CrystalWhite,
-                            fontWeight = FontWeight.SemiBold
-                        )
+                        Button(
+                            onClick = {
+                                permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = accentColor),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(
+                                text = "Allow Microphone",
+                                color = if (isDark) AmoledBlack else CrystalWhite,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+
+                        TextButton(
+                            onClick = {
+                                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                    data = Uri.fromParts("package", context.packageName, null)
+                                }
+                                context.startActivity(intent)
+                            }
+                        ) {
+                            Text(
+                                text = "App Settings",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
             } else if (selectedTabIndex == 0) {
@@ -502,11 +539,7 @@ private fun VoiceNoteRecordingSection(
                     accentColor.copy(alpha = if (isDark) 0.16f else 0.12f)
                 } else {
                     if (isDark) Color(0xFF27272A) else Color(0xFFE4E4E7)
-                },
-                border = BorderStroke(
-                    0.8.dp,
-                    if (isDenoiseEnabled) accentColor.copy(alpha = 0.5f) else Color.Transparent
-                )
+                }
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
@@ -554,11 +587,7 @@ private fun VoiceNoteRecordingSection(
                     accentColor.copy(alpha = if (isDark) 0.16f else 0.12f)
                 } else {
                     if (isDark) Color(0xFF27272A) else Color(0xFFE4E4E7)
-                },
-                border = BorderStroke(
-                    0.8.dp,
-                    if (isDenoiseEnabled) accentColor.copy(alpha = 0.5f) else Color.Transparent
-                )
+                }
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
@@ -610,13 +639,6 @@ private fun VoiceNoteRecordingSection(
                     .height(64.dp)
                     .clip(RoundedCornerShape(16.dp))
                     .background(if (isDark) Color(0xFF18181B) else Color(0xFFF4F4F5))
-                    .border(
-                        BorderStroke(
-                            0.6.dp,
-                            if (isDark) Color(0xFF27272A) else Color(0xFFE4E4E7)
-                        ),
-                        RoundedCornerShape(16.dp)
-                    )
                     .padding(horizontal = 14.dp, vertical = 6.dp)
             ) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
@@ -840,8 +862,7 @@ private fun VoiceToTextSection(
                 .heightIn(min = 120.dp)
                 .clip(RoundedCornerShape(16.dp)),
             shape = RoundedCornerShape(16.dp),
-            color = if (isDark) Color(0xFF141418) else Color(0xFFF4F4F6),
-            border = BorderStroke(0.6.dp, if (isDark) Color(0xFF26262E) else Color(0xFFE4E4E8))
+            color = if (isDark) Color(0xFF141418) else Color(0xFFF4F4F6)
         ) {
             Box(
                 modifier = Modifier

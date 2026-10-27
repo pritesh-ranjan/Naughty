@@ -242,3 +242,4 @@ class AppContainer(private val context: Context) {
     fun timelineListViewModel() = TimelineListViewModel(timelineRepository)
     fun timelineDetailViewModel(trackerId: String) = TimelineDetailViewModel(trackerId, timelineRepository, reminderManager)
 }
+

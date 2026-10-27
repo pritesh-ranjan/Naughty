@@ -35,3 +35,4 @@
 
 # ProfileInstaller
 -dontwarn androidx.profileinstaller.**
+

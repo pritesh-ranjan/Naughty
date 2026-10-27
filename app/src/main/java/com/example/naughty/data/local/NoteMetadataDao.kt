@@ -20,6 +20,9 @@ interface NoteMetadataDao {
     @Query("SELECT * FROM note_metadata WHERE isDeleted = 1 ORDER BY modifiedAt DESC")
     suspend fun getAllDeletedDirect(): List<NoteMetadata>
 
+    @Query("SELECT * FROM note_metadata WHERE isArchived = 0 AND isDeleted = 0 ORDER BY modifiedAt DESC")
+    suspend fun getAllActiveDirect(): List<NoteMetadata>
+
     @Query("SELECT COUNT(*) FROM note_metadata WHERE isArchived = 0 AND isDeleted = 0")
     fun countActive(): Flow<Int>
 
@@ -58,4 +61,13 @@ interface NoteMetadataDao {
 
     @Query("SELECT COUNT(*) FROM note_metadata WHERE isArchived = 0 AND isDeleted = 0")
     suspend fun count(): Int
+
+    @Query("SELECT * FROM note_metadata WHERE isArchived = 0 AND isDeleted = 0 AND cardType = 'todo' ORDER BY isPinned DESC, modifiedAt DESC LIMIT 1")
+    suspend fun getOfficialTodoNote(): NoteMetadata?
+
+    @Query("SELECT * FROM note_metadata WHERE isArchived = 0 AND isDeleted = 0 AND LOWER(TRIM(title)) IN ('todo', 'to-do', 'todos', 'todo list', 'to-do list') ORDER BY CASE WHEN LOWER(TRIM(title)) = 'todo' THEN 0 ELSE 1 END, isPinned DESC, modifiedAt DESC LIMIT 1")
+    suspend fun findCandidateTodoNoteByTitle(): NoteMetadata?
+
+    @Query("SELECT * FROM note_metadata WHERE isArchived = 0 AND isDeleted = 0 AND LOWER(TRIM(title)) = 'circle to search' ORDER BY modifiedAt DESC LIMIT 1")
+    suspend fun getDedicatedCtsNote(): NoteMetadata?
 }

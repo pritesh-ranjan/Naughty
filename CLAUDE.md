@@ -42,6 +42,23 @@ This document serves as the single source of truth for AI agents and human engin
 * **Tracked Version File**:
   `version.properties` tracks `VERSION_CODE` (e.g. `3`) and `VERSION_NAME` (e.g. `2.1`).
 
+### 1.3 Android Emulator & ADB Operations
+* **Configured AVD**: `Pixel_10a`.
+* Launch emulator command:
+  ```bash
+  export ANDROID_HOME="$HOME/Library/Android/sdk"
+  "$ANDROID_HOME/emulator/emulator" -avd Pixel_10a
+  ```
+* Wait for boot completion:
+  ```bash
+  export ANDROID_HOME="$HOME/Library/Android/sdk"
+  "$ANDROID_HOME/platform-tools/adb" wait-for-device shell 'while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done;'
+  ```
+* **Autonomous ADB & Emulator Operations (No Permission Required)**:
+  * Taking screenshots inside `adb` (`adb shell screencap -p /sdcard/screen.png` and pulling) does **not** require user permission.
+  * Interacting with Naughty or the Android OS via `adb` in the emulator (`adb shell input tap/swipe/text/keyevent`, `adb shell am start`, `adb shell uiautomator dump`, `adb install -r`, etc.) does **not** require user permission.
+  * Execute all emulator and adb verification/interaction commands autonomously without prompting or asking the user for permission.
+
 ---
 
 ## 2. System Architecture & Component Overview
@@ -319,3 +336,5 @@ app/src/main/java/com/example/naughty/
    Naughty is open-source under the **MIT License**. Never include proprietary SDKs or tracking modules.
 7. **Production Signing & Package Visibility**:
    Release APKs/AABs are signed using APK Signature Schemes v2 and v3 (`release.keystore`, SHA-256 `d90ce14a4337481a80cf5e33d5df4fe8b3e88d323b152f63e4a090605e636069`, alias `androiddebugkey`). This signing key is pinned to match the user's installed package signature, ensuring seamless in-place updates (`adb install -r`) with zero data/database loss. Never switch or regenerate this keystore. App visibility is handled strictly via `<queries>` intent filters for launcher activities—never reintroduce `QUERY_ALL_PACKAGES`. Cloud backup is explicitly disabled in `data_extraction_rules.xml`.
+8. **Autonomous Emulator & ADB Operations**:
+   Taking screenshots via `adb` and interacting with the app via `adb` in the emulator (screen capture, tap/swipe/key input, activity starts, UI inspection, and app verification) does **not** require permission from the user. Run these operations autonomously without asking for approval.

@@ -30,18 +30,26 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import android.widget.Toast
 import androidx.lifecycle.lifecycleScope
+import com.example.naughty.binding.DetectorForegroundService
 import com.example.naughty.ui.binding.BindingSheet
+import com.example.naughty.ui.components.FeatureShowcaseSheet
 import com.example.naughty.ui.components.PermissionGate
+import com.example.naughty.ui.components.ShareAudioOptionSheet
+import com.example.naughty.ui.components.ShareImageOptionSheet
 import com.example.naughty.ui.components.UniversalSearchOverlay
+import com.example.naughty.ui.components.shouldShowFeatureShowcase
 import com.example.naughty.ui.editor.NoteEditorScreen
 import com.example.naughty.ui.navigation.NoteEditorKey
 import com.example.naughty.ui.navigation.NoteListKey
 import com.example.naughty.ui.navigation.TimelineDetailKey
 import com.example.naughty.ui.navigation.TimelineListKey
 import com.example.naughty.ui.notelist.NoteListScreen
+import com.example.naughty.ui.theme.LAST_SEEN_VERSION_CODE_KEY
 import com.example.naughty.ui.theme.NaughtyTheme
-import com.example.naughty.ui.components.ShareAudioOptionSheet
-import com.example.naughty.ui.components.ShareImageOptionSheet
+import com.example.naughty.ui.theme.getAppVersionCode
+import com.example.naughty.ui.theme.getAppVersionName
+import com.example.naughty.ui.theme.setLastSeenVersionCode
+import com.example.naughty.ui.theme.themeDataStore
 import com.example.naughty.ui.timeline.TimelineDetailScreen
 import com.example.naughty.ui.timeline.TimelineListScreen
 import com.example.naughty.util.AudioShareMode
@@ -50,6 +58,8 @@ import com.example.naughty.util.PendingAudioShare
 import com.example.naughty.util.PendingImageShare
 import com.example.naughty.util.ShareIntentHandler
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.runtime.getValue
@@ -69,9 +79,21 @@ class MainActivity : FragmentActivity() {
     private var isProcessingAudioShare by mutableStateOf(false)
     private var audioProcessingText by mutableStateOf("")
 
+    private var showFeatureShowcase by mutableStateOf(false)
+    private var showcaseIsFirstLaunch by mutableStateOf(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        lifecycleScope.launch {
+            val currentCode = getAppVersionCode()
+            val lastSeen = themeDataStore.data.map { it[LAST_SEEN_VERSION_CODE_KEY] }.first()
+            if (shouldShowFeatureShowcase(lastSeen, currentCode)) {
+                showcaseIsFirstLaunch = (lastSeen == null)
+                showFeatureShowcase = true
+            }
+        }
 
         if (savedInstanceState == null) {
             handleIncomingIntent(intent)
@@ -203,9 +225,30 @@ class MainActivity : FragmentActivity() {
                             )
                         }
                     }
+
+                    val isHandlingShare = pendingImageShare != null || pendingAudioShare != null
+                    if (showFeatureShowcase && !isHandlingShare) {
+                        FeatureShowcaseSheet(
+                            versionName = getAppVersionName(),
+                            versionCode = getAppVersionCode(),
+                            isFirstLaunch = showcaseIsFirstLaunch,
+                            onDismiss = {
+                                showFeatureShowcase = false
+                                lifecycleScope.launch {
+                                    setLastSeenVersionCode(getAppVersionCode())
+                                }
+                            }
+                        )
+                    }
                 }
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // Ensure background context engine is active and immune to cached freezing
+        DetectorForegroundService.start(this)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -241,6 +284,17 @@ class MainActivity : FragmentActivity() {
                 )
                 withContext(Dispatchers.Main) {
                     pendingNoteId = createdNote.id
+                }
+            }
+            return
+        } else if (actionExtra == "todo_note") {
+            isBypassed = true
+            val app = applicationContext as? NaughtyApp ?: return
+            val repository = app.container.noteRepository
+            lifecycleScope.launch {
+                val official = repository.getOrCreateOfficialTodoNote()
+                withContext(Dispatchers.Main) {
+                    pendingNoteId = official.metadata.id
                 }
             }
             return

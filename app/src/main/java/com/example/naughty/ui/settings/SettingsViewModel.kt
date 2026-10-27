@@ -50,4 +50,12 @@ class SettingsViewModel(
             noteRepository.deleteAllNotes()
         }
     }
+
+    fun purgeDeletedAndBlankNotes(onComplete: (Int) -> Unit = {}) {
+        viewModelScope.launch {
+            val count = noteRepository.purgeDeletedAndBlankNotes()
+            onComplete(count)
+        }
+    }
 }
+

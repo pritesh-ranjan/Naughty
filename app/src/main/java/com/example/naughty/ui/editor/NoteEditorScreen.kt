@@ -3,9 +3,7 @@ package com.example.naughty.ui.editor
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -59,18 +57,32 @@ import androidx.compose.material.icons.automirrored.outlined.Undo
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.CheckBox
 import androidx.compose.material.icons.outlined.CheckBoxOutlineBlank
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.automirrored.outlined.FormatListBulleted
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Link
+import androidx.compose.material.icons.outlined.AlternateEmail
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.PictureAsPdf
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.automirrored.outlined.Article
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.ui.text.TextLayoutResult
+import com.example.naughty.data.mention.MentionItem
+import com.example.naughty.data.mention.MentionTriggerState
+import com.example.naughty.data.mention.MentionType
+import com.example.naughty.ui.editor.MentionActionHandler
+import com.example.naughty.ui.editor.MentionChip
+import com.example.naughty.ui.editor.MentionParser
+import com.example.naughty.ui.editor.MentionSuggestionSheet
+import com.example.naughty.ui.editor.MentionVisualTransformation
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -97,8 +109,15 @@ import com.example.naughty.util.BiometricStatus
 import com.example.naughty.util.NoteLockSession
 import com.example.naughty.util.findFragmentActivity
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import com.example.naughty.util.ImageTextExtractor
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.runtime.rememberCoroutineScope
@@ -147,6 +166,7 @@ import com.example.naughty.ui.editor.InlineReminderParser
 import com.example.naughty.ui.editor.ReminderBottomSheet
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.buildAnnotatedString
@@ -232,6 +252,9 @@ fun NoteEditorScreen(
     var requestFocusBlockId by remember { mutableStateOf<String?>(null) }
     var requestFocusCursorPosition by remember { mutableStateOf<Int?>(null) }
 
+    var activeMentionTrigger by remember { mutableStateOf<MentionTriggerState?>(null) }
+    var activeMentionBlockId by remember { mutableStateOf<String?>(null) }
+
     var toolbarBounds by remember { mutableStateOf<Rect?>(null) }
     LaunchedEffect(uiState.isLocked, isUnlockedInSession) {
         if (uiState.isLocked && !isUnlockedInSession) {
@@ -249,6 +272,44 @@ fun NoteEditorScreen(
                 selection = TextRange(s, e)
             )
         }
+    }
+
+    val onSelectMention: (MentionItem) -> Unit = { item ->
+        val trigger = activeMentionTrigger
+        if (trigger != null) {
+            val tag = MentionParser.createMentionTag(item) + " "
+            val blockId = activeMentionBlockId
+            if (blockId == null) {
+                // Raw markdown mode
+                val curText = rawTextFieldValue.text
+                val start = trigger.startIndex.coerceIn(0, curText.length)
+                val end = trigger.endIndex.coerceIn(start, curText.length)
+                val newText = curText.substring(0, start) + tag + curText.substring(end)
+                val newCursor = start + tag.length
+                rawTextFieldValue = TextFieldValue(text = newText, selection = TextRange(newCursor))
+                viewModel.updateContent(newText)
+            } else {
+                val block = uiState.blocks.find { it.id == blockId }
+                if (block is EditorBlock.Text) {
+                    val curText = block.text
+                    val start = trigger.startIndex.coerceIn(0, curText.length)
+                    val end = trigger.endIndex.coerceIn(start, curText.length)
+                    val newText = curText.substring(0, start) + tag + curText.substring(end)
+                    viewModel.updateTextBlock(blockId, newText)
+                    requestFocusBlockId = blockId
+                    requestFocusCursorPosition = start + tag.length
+                } else if (block is EditorBlock.Checklist) {
+                    val curText = block.text
+                    val start = trigger.startIndex.coerceIn(0, curText.length)
+                    val end = trigger.endIndex.coerceIn(start, curText.length)
+                    val newText = curText.substring(0, start) + tag + curText.substring(end)
+                    viewModel.updateChecklistText(blockId, newText)
+                    requestFocusBlockId = blockId
+                }
+            }
+        }
+        activeMentionTrigger = null
+        activeMentionBlockId = null
     }
 
 
@@ -292,6 +353,14 @@ fun NoteEditorScreen(
         }
     }
 
+    val savePdfLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/pdf")
+    ) { uri: Uri? ->
+        if (uri != null) {
+            viewModel.saveNoteAsPdf(context, uri, isDark)
+        }
+    }
+
     LaunchedEffect(noteId) {
         viewModel.loadNote(noteId)
     }
@@ -306,24 +375,7 @@ fun NoteEditorScreen(
     }
 
     val reminderVisualTransformation = remember(currentTheme.accent) {
-        VisualTransformation { text ->
-            val annotatedString = buildAnnotatedString {
-                append(text.text)
-                val regex = Regex("""(?:🔔\s*)?\[(?:🔔\s*)?([^\]]+)\]\(reminder:(\d+)\)""")
-                for (match in regex.findAll(text.text)) {
-                    addStyle(
-                        style = SpanStyle(
-                            color = currentTheme.accent,
-                            fontWeight = FontWeight.Bold,
-                            background = currentTheme.accent.copy(alpha = 0.14f)
-                        ),
-                        start = match.range.first,
-                        end = match.range.last + 1
-                    )
-                }
-            }
-            TransformedText(annotatedString, OffsetMapping.Identity)
-        }
+        MentionVisualTransformation(currentTheme.accent)
     }
 
     Box(
@@ -532,6 +584,34 @@ fun NoteEditorScreen(
                                         viewModel.shareNoteAsFile(context)
                                     }
                                 )
+                                DropdownMenuItem(
+                                    text = { Text("Share as PDF") },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Outlined.PictureAsPdf,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    },
+                                    onClick = {
+                                        showShareMenu = false
+                                        viewModel.shareNoteAsPdf(context, isDark)
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Save as PDF") },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Download,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    },
+                                    onClick = {
+                                        showShareMenu = false
+                                        savePdfLauncher.launch(viewModel.getSuggestedPdfFileName())
+                                    }
+                                )
                             }
                         }
 
@@ -665,6 +745,34 @@ fun NoteEditorScreen(
                                     }
                                 )
                                 DropdownMenuItem(
+                                    text = { Text("Share as PDF") },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Outlined.PictureAsPdf,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    },
+                                    onClick = {
+                                        showMenu = false
+                                        viewModel.shareNoteAsPdf(context, isDark)
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Save as PDF") },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Download,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    },
+                                    onClick = {
+                                        showMenu = false
+                                        savePdfLauncher.launch(viewModel.getSuggestedPdfFileName())
+                                    }
+                                )
+                                DropdownMenuItem(
                                     text = { Text(if (uiState.isRawMarkdownMode) "Card View" else "Raw Markdown") },
                                     onClick = {
                                         viewModel.toggleRawMarkdownMode()
@@ -771,6 +879,9 @@ fun NoteEditorScreen(
                             if (transformed.text != uiState.content) {
                                 viewModel.updateContent(transformed.text)
                             }
+                            val trigger = MentionParser.detectMentionTrigger(transformed.text, transformed.selection.start)
+                            activeMentionBlockId = null
+                            activeMentionTrigger = trigger
                         },
                         visualTransformation = reminderVisualTransformation,
                         textStyle = TextStyle(
@@ -792,6 +903,26 @@ fun NoteEditorScreen(
                                 }
                             }
                     )
+
+                    val rawMentions = remember(rawTextFieldValue.text) {
+                        MentionParser.parseMentions(rawTextFieldValue.text)
+                    }
+                    if (rawMentions.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            rawMentions.forEach { mention ->
+                                MentionChip(
+                                    mention = mention,
+                                    fontFamily = currentTheme.fontFamily,
+                                    onClick = { MentionActionHandler.openMention(context, mention) }
+                                )
+                            }
+                        }
+                    }
                 } else {
                     // Aesthetic Modular Card View (Anti-note style)
                     Surface(
@@ -799,8 +930,7 @@ fun NoteEditorScreen(
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(22.dp)),
                         shape = RoundedCornerShape(22.dp),
-                        color = currentTheme.surface,
-                        border = BorderStroke(1.dp, currentTheme.border)
+                        color = currentTheme.surface
                     ) {
                         Box(
                             modifier = Modifier
@@ -855,7 +985,6 @@ fun NoteEditorScreen(
                                                 Surface(
                                                     shape = RoundedCornerShape(12.dp),
                                                     color = ElectricCyan.copy(alpha = 0.12f),
-                                                    border = BorderStroke(0.6.dp, ElectricCyan.copy(alpha = 0.35f)),
                                                     modifier = Modifier
                                                         .clip(RoundedCornerShape(12.dp))
                                                         .clickable { onBindingClick() }
@@ -883,8 +1012,7 @@ fun NoteEditorScreen(
                                             // Additional + chip to add more bindings
                                             Surface(
                                                 shape = RoundedCornerShape(12.dp),
-                                                color = Color.Transparent,
-                                                border = BorderStroke(0.6.dp, ElectricCyan.copy(alpha = 0.35f)),
+                                                color = ElectricCyan.copy(alpha = 0.12f),
                                                 modifier = Modifier
                                                     .clip(RoundedCornerShape(12.dp))
                                                     .clickable { onBindingClick() }
@@ -946,6 +1074,50 @@ fun NoteEditorScreen(
                                     }
                                 }
 
+                                if (uiState.cardType == "todo") {
+                                    val hasPlainTextLines = remember(uiState.blocks) {
+                                        uiState.blocks.any { it is EditorBlock.Text && it.text.isNotBlank() }
+                                    }
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = ElectricGreen.copy(alpha = 0.14f)
+                                        ) {
+                                            Text(
+                                                text = "TODO LIST",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = ElectricGreen,
+                                                fontSize = 10.sp,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.5.dp)
+                                            )
+                                        }
+
+                                        if (hasPlainTextLines) {
+                                            Surface(
+                                                shape = RoundedCornerShape(8.dp),
+                                                color = currentTheme.accent.copy(alpha = 0.14f),
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .clickable { viewModel.convertPlainTextBlocksToTodos() }
+                                            ) {
+                                                Text(
+                                                    text = "Convert text lines to todos",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = currentTheme.accent,
+                                                    fontSize = 10.5.sp,
+                                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
                             Spacer(modifier = Modifier.height(16.dp))
 
                             // Unified Document Blocks Canvas
@@ -996,7 +1168,12 @@ fun NoteEditorScreen(
                                                     reminderInitialTime = block.reminder?.timestampMillis
                                                     isEditingNoteReminder = false
                                                     showReminderSheet = true
-                                                }
+                                                },
+                                                onMentionTrigger = { trigger ->
+                                                    activeMentionBlockId = block.id
+                                                    activeMentionTrigger = trigger
+                                                },
+                                                visualTransformation = reminderVisualTransformation
                                             )
                                         }
                                         is EditorBlock.Text -> {
@@ -1029,7 +1206,12 @@ fun NoteEditorScreen(
                                                     reminderInitialTime = reminder.timestampMillis
                                                     isEditingNoteReminder = false
                                                     showReminderSheet = true
-                                                }
+                                                },
+                                                onMentionTrigger = { trigger ->
+                                                    activeMentionBlockId = block.id
+                                                    activeMentionTrigger = trigger
+                                                },
+                                                visualTransformation = reminderVisualTransformation
                                             )
                                         }
                                     }
@@ -1134,8 +1316,7 @@ fun NoteEditorScreen(
                         toolbarBounds = coordinates.boundsInRoot()
                     },
                 shape = RoundedCornerShape(27.dp),
-                color = if (isDark) AmoledBlack else CrystalWhite,
-                border = BorderStroke(0.6.dp, if (isDark) Color(0xFF1E1E24) else Color(0xFFE4E4E7))
+                color = if (isDark) AmoledBlack else CrystalWhite
             ) {
                 CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
                     BoxWithConstraints(
@@ -1380,6 +1561,63 @@ fun NoteEditorScreen(
                         )
                     }
 
+                    // Mention button (@)
+                    IconButton(
+                        onClick = {
+                            val targetId = focusedBlockId ?: lastFocusedBlockId
+                            if (uiState.isRawMarkdownMode) {
+                                activeMentionBlockId = null
+                                val sel = rawTextFieldValue.selection.start.coerceIn(0, rawTextFieldValue.text.length)
+                                val newText = rawTextFieldValue.text.substring(0, sel) + "@" + rawTextFieldValue.text.substring(sel)
+                                rawTextFieldValue = TextFieldValue(text = newText, selection = TextRange(sel + 1))
+                                viewModel.updateContent(newText)
+                                activeMentionTrigger = MentionTriggerState(query = "", startIndex = sel, endIndex = sel + 1)
+                            } else {
+                                val block = uiState.blocks.find { it.id == targetId }
+                                if (block is EditorBlock.Text) {
+                                    val sel = focusedCursorOffset.coerceIn(0, block.text.length)
+                                    val newText = block.text.substring(0, sel) + "@" + block.text.substring(sel)
+                                    viewModel.updateTextBlock(block.id, newText)
+                                    activeMentionBlockId = block.id
+                                    activeMentionTrigger = MentionTriggerState(query = "", startIndex = sel, endIndex = sel + 1)
+                                    requestFocusBlockId = block.id
+                                    requestFocusCursorPosition = sel + 1
+                                } else if (block is EditorBlock.Checklist) {
+                                    val newText = block.text + "@"
+                                    viewModel.updateChecklistText(block.id, newText)
+                                    activeMentionBlockId = block.id
+                                    activeMentionTrigger = MentionTriggerState(query = "", startIndex = block.text.length, endIndex = block.text.length + 1)
+                                    requestFocusBlockId = block.id
+                                } else {
+                                    val lastBlock = uiState.blocks.lastOrNull()
+                                    if (lastBlock is EditorBlock.Text) {
+                                        val newText = lastBlock.text + if (lastBlock.text.endsWith(" ") || lastBlock.text.isEmpty()) "@" else " @"
+                                        viewModel.updateTextBlock(lastBlock.id, newText)
+                                        activeMentionBlockId = lastBlock.id
+                                        activeMentionTrigger = MentionTriggerState(query = "", startIndex = newText.length - 1, endIndex = newText.length)
+                                        requestFocusBlockId = lastBlock.id
+                                        requestFocusCursorPosition = newText.length
+                                    } else {
+                                        val newId = viewModel.insertTextBlockAfter(lastBlock?.id ?: "")
+                                        viewModel.updateTextBlock(newId, "@")
+                                        activeMentionBlockId = newId
+                                        activeMentionTrigger = MentionTriggerState(query = "", startIndex = 0, endIndex = 1)
+                                        requestFocusBlockId = newId
+                                        requestFocusCursorPosition = 1
+                                    }
+                                }
+                            }
+                        },
+                        modifier = Modifier.size(34.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.AlternateEmail,
+                            contentDescription = "Mention contact, app, or calendar event",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
                     // Bell Icon (Reminder button)
                     IconButton(
                         onClick = {
@@ -1479,6 +1717,28 @@ fun NoteEditorScreen(
         }
     }
 }
+
+    // Autocomplete Mention Suggestions Sheet
+    // Appears directly above keyboard and toolbar when activeMentionTrigger has at least 1 query character (starts suggesting after typing the second character)
+    if (activeMentionTrigger != null && activeMentionTrigger!!.query.length >= 1) {
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.navigationBars)
+                .imePadding()
+                .padding(bottom = 76.dp, start = 14.dp, end = 14.dp)
+        ) {
+            MentionSuggestionSheet(
+                query = activeMentionTrigger!!.query,
+                onSelect = onSelectMention,
+                onDismiss = {
+                    activeMentionTrigger = null
+                    activeMentionBlockId = null
+                }
+            )
+        }
+    }
 
         if (showDeleteNoteConfirmDialog) {
             AlertDialog(
@@ -1640,7 +1900,7 @@ fun NoteEditorScreen(
 }
 
 @Composable
-private fun ChecklistItemRow(
+internal fun ChecklistItemRow(
     block: EditorBlock.Checklist,
     currentTheme: NoteTheme,
     isRequestedFocus: Boolean,
@@ -1652,9 +1912,22 @@ private fun ChecklistItemRow(
     onBackspaceOnEmpty: () -> Unit,
     onDelete: () -> Unit,
     onReminderClick: (() -> Unit)?,
+    onMentionTrigger: ((MentionTriggerState?) -> Unit)? = null,
+    visualTransformation: VisualTransformation = VisualTransformation.None,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    var isVisible by remember(block.id) { mutableStateOf(true) }
+    var isFocused by remember(block.id) { mutableStateOf(false) }
+    var isEditing by remember(block.id) { mutableStateOf(false) }
+    var hasBeenFocused by remember(block.id) { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
+    val hasMentions = remember(block.text) { MentionParser.hasMentions(block.text) }
+    val inlineAnnotatedString = remember(block.text, currentTheme.accent) {
+        MentionParser.buildInlineAnnotatedString(block.text, currentTheme.accent)
+    }
+    var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
     var textFieldValue by remember(block.id) {
         mutableStateOf(
             TextFieldValue(
@@ -1676,6 +1949,7 @@ private fun ChecklistItemRow(
 
     LaunchedEffect(isRequestedFocus) {
         if (isRequestedFocus) {
+            isEditing = true
             try {
                 focusRequester.requestFocus()
             } catch (_: Exception) {}
@@ -1683,12 +1957,28 @@ private fun ChecklistItemRow(
         }
     }
 
-    Row(
-        verticalAlignment = Alignment.Top,
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp)
+    LaunchedEffect(isEditing) {
+        if (isEditing) {
+            try {
+                focusRequester.requestFocus()
+            } catch (_: Exception) {}
+        } else {
+            hasBeenFocused = false
+        }
+    }
+
+    AnimatedVisibility(
+        visible = isVisible,
+        enter = fadeIn() + expandVertically(),
+        exit = fadeOut(animationSpec = tween(durationMillis = 200)) +
+                shrinkVertically(animationSpec = tween(durationMillis = 200))
     ) {
+        Row(
+            verticalAlignment = Alignment.Top,
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp)
+        ) {
         Icon(
             imageVector = if (block.isChecked) Icons.Outlined.CheckBox else Icons.Outlined.CheckBoxOutlineBlank,
             contentDescription = if (block.isChecked) "Completed task" else "Incomplete task",
@@ -1702,20 +1992,71 @@ private fun ChecklistItemRow(
         Column(
             modifier = Modifier.weight(1f)
         ) {
-            BasicTextField(
-                value = textFieldValue,
-                onValueChange = { newValue ->
-                    textFieldValue = newValue
-                    if (newValue.text != block.text) {
-                        onTextChange(newValue.text)
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .focusRequester(focusRequester)
-                    .onFocusChanged { focusState ->
-                        onFocusChanged(focusState.isFocused)
-                    }
+            if (!isEditing && hasMentions) {
+                Text(
+                    text = inlineAnnotatedString,
+                    style = TextStyle(
+                        fontFamily = currentTheme.fontFamily,
+                        fontSize = 17.sp,
+                        lineHeight = 25.sp,
+                        color = if (block.isChecked) currentTheme.textSecondary else currentTheme.textPrimary,
+                        textDecoration = if (block.isChecked) TextDecoration.LineThrough else null
+                    ),
+                    onTextLayout = { textLayoutResult = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .pointerInput(block.text) {
+                            detectTapGestures { tapOffset ->
+                                val layout = textLayoutResult ?: return@detectTapGestures
+                                val charOffset = layout.getOffsetForPosition(tapOffset)
+                                val annotations = inlineAnnotatedString.getStringAnnotations(
+                                    tag = "mention",
+                                    start = charOffset,
+                                    end = charOffset
+                                )
+                                val mentionAnnotation = annotations.firstOrNull()
+                                if (mentionAnnotation != null) {
+                                    val parsed = MentionParser.parseAnnotation(mentionAnnotation.item)
+                                    if (parsed != null) {
+                                        MentionActionHandler.openMention(context, parsed)
+                                        return@detectTapGestures
+                                    }
+                                }
+                                val transformedResult = visualTransformation.filter(AnnotatedString(block.text))
+                                val originalOffset = transformedResult.offsetMapping.transformedToOriginal(charOffset)
+                                textFieldValue = textFieldValue.copy(
+                                    selection = TextRange(originalOffset.coerceIn(0, block.text.length))
+                                )
+                                isEditing = true
+                            }
+                        }
+                )
+            } else {
+                BasicTextField(
+                    value = textFieldValue,
+                    onValueChange = { newValue ->
+                        textFieldValue = newValue
+                        if (newValue.text != block.text) {
+                            onTextChange(newValue.text)
+                        }
+                        val trigger = MentionParser.detectMentionTrigger(newValue.text, newValue.selection.start)
+                        onMentionTrigger?.invoke(trigger)
+                    },
+                    visualTransformation = visualTransformation,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(focusRequester)
+                        .onFocusChanged { focusState ->
+                            isFocused = focusState.isFocused
+                            if (focusState.isFocused) {
+                                hasBeenFocused = true
+                                onFocusChanged(true)
+                            } else if (hasBeenFocused) {
+                                isEditing = false
+                                hasBeenFocused = false
+                                onFocusChanged(false)
+                            }
+                        }
                     .onPreviewKeyEvent { event ->
                         if (event.key == Key.Backspace && event.type == KeyEventType.KeyDown) {
                             if (textFieldValue.text.isEmpty()) {
@@ -1758,35 +2099,83 @@ private fun ChecklistItemRow(
                             false
                         }
                     },
-                textStyle = TextStyle(
-                    fontFamily = currentTheme.fontFamily,
-                    fontSize = 17.sp,
-                    lineHeight = 25.sp,
-                    color = if (block.isChecked) currentTheme.textSecondary else currentTheme.textPrimary,
-                    textDecoration = if (block.isChecked) TextDecoration.LineThrough else null
-                ),
-                cursorBrush = SolidColor(currentTheme.cursorColor),
-                singleLine = false,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                keyboardActions = KeyboardActions(
-                    onNext = { onNext(textFieldValue.text) },
-                    onDone = { onNext(textFieldValue.text) }
-                ),
-                decorationBox = { innerTextField ->
-                    Box {
-                        if (textFieldValue.text.isEmpty()) {
-                            Text(
-                                text = "To-do",
-                                fontFamily = currentTheme.fontFamily,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = currentTheme.textSecondary.copy(alpha = 0.45f),
-                                fontSize = 17.sp
-                            )
+                    textStyle = TextStyle(
+                        fontFamily = currentTheme.fontFamily,
+                        fontSize = 17.sp,
+                        lineHeight = 25.sp,
+                        color = if (block.isChecked) currentTheme.textSecondary else currentTheme.textPrimary,
+                        textDecoration = if (block.isChecked) TextDecoration.LineThrough else null
+                    ),
+                    cursorBrush = SolidColor(currentTheme.cursorColor),
+                    singleLine = false,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                    keyboardActions = KeyboardActions(
+                        onNext = { onNext(textFieldValue.text) },
+                        onDone = { onNext(textFieldValue.text) }
+                    ),
+                    decorationBox = { innerTextField ->
+                        Box {
+                            if (textFieldValue.text.isEmpty()) {
+                                Text(
+                                    text = "To-do",
+                                    fontFamily = currentTheme.fontFamily,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = currentTheme.textSecondary.copy(alpha = 0.45f),
+                                    fontSize = 17.sp
+                                )
+                            }
+                            innerTextField()
                         }
-                        innerTextField()
+                    }
+                )
+            }
+
+            val activeMentionUnderCursor = remember(textFieldValue.selection.start, block.text) {
+                if (isFocused && textFieldValue.selection.collapsed) {
+                    val cursor = textFieldValue.selection.start
+                    MentionParser.parseMentions(block.text).firstOrNull {
+                        cursor in it.startIndex..it.endIndex
+                    }
+                } else null
+            }
+
+            if (activeMentionUnderCursor != null) {
+                Spacer(modifier = Modifier.height(3.dp))
+                val tint = when (activeMentionUnderCursor.type) {
+                    MentionType.CONTACT -> ElectricGreen
+                    MentionType.APP -> ElectricCyan
+                    MentionType.CALENDAR -> ElectricAmber
+                }
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = tint.copy(alpha = 0.14f),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .clickable {
+                            MentionActionHandler.openMention(context, activeMentionUnderCursor)
+                        }
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
+                            contentDescription = null,
+                            tint = tint,
+                            modifier = Modifier.size(11.dp)
+                        )
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(
+                            text = "Open @${activeMentionUnderCursor.title}",
+                            fontFamily = currentTheme.fontFamily,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 11.sp,
+                            color = tint
+                        )
                     }
                 }
-            )
+            }
 
             if (block.reminder != null) {
                 Spacer(modifier = Modifier.height(4.dp))
@@ -1839,7 +2228,16 @@ private fun ChecklistItemRow(
             }
 
             IconButton(
-                onClick = onDelete,
+                onClick = {
+                    if (isVisible) {
+                        Toast.makeText(context, "Task removed", Toast.LENGTH_SHORT).show()
+                        coroutineScope.launch {
+                            isVisible = false
+                            delay(200)
+                            onDelete()
+                        }
+                    }
+                },
                 modifier = Modifier.size(24.dp)
             ) {
                 Icon(
@@ -1852,9 +2250,10 @@ private fun ChecklistItemRow(
         }
     }
 }
+}
 
 @Composable
-private fun TextBlockItem(
+internal fun TextBlockItem(
     block: EditorBlock.Text,
     currentTheme: NoteTheme,
     showPlaceholder: Boolean,
@@ -1864,9 +2263,20 @@ private fun TextBlockItem(
     onFocusChanged: (Boolean, Int) -> Unit,
     onTextChange: (String) -> Unit,
     onReminderClick: ((InlineReminder) -> Unit)?,
+    onMentionTrigger: ((MentionTriggerState?) -> Unit)? = null,
+    visualTransformation: VisualTransformation = VisualTransformation.None,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val focusRequester = remember { FocusRequester() }
+    var isFocused by remember(block.id) { mutableStateOf(false) }
+    var isEditing by remember(block.id) { mutableStateOf(false) }
+    var hasBeenFocused by remember(block.id) { mutableStateOf(false) }
+    val hasMentions = remember(block.text) { MentionParser.hasMentions(block.text) }
+    val inlineAnnotatedString = remember(block.text, currentTheme.accent) {
+        MentionParser.buildInlineAnnotatedString(block.text, currentTheme.accent)
+    }
+    var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
     var textFieldValue by remember(block.id) {
         val initialSel = requestedCursorPosition?.coerceIn(0, block.text.length) ?: block.text.length
         mutableStateOf(
@@ -1892,10 +2302,21 @@ private fun TextBlockItem(
             val targetText = block.text
             val clamped = requestedCursorPosition?.coerceIn(0, targetText.length) ?: targetText.length
             textFieldValue = TextFieldValue(text = targetText, selection = TextRange(clamped))
+            isEditing = true
             try {
                 focusRequester.requestFocus()
             } catch (_: Exception) {}
             onFocusConsumed()
+        }
+    }
+
+    LaunchedEffect(isEditing) {
+        if (isEditing) {
+            try {
+                focusRequester.requestFocus()
+            } catch (_: Exception) {}
+        } else {
+            hasBeenFocused = false
         }
     }
 
@@ -1942,51 +2363,152 @@ private fun TextBlockItem(
             }
         }
 
-        BasicTextField(
-            value = textFieldValue,
-            onValueChange = { newValue ->
-                val transformed = BulletTextHelper.handleValueChange(textFieldValue, newValue) ?: newValue
-                textFieldValue = transformed
-                onFocusChanged(true, transformed.selection.start)
-                if (transformed.text != block.text) {
-                    onTextChange(transformed.text)
-                }
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .focusRequester(focusRequester)
-                .onPreviewKeyEvent { event ->
-                    BulletTextHelper.handleKeyEvent(event, textFieldValue) { transformed ->
-                        textFieldValue = transformed
-                        onFocusChanged(true, transformed.selection.start)
-                        if (transformed.text != block.text) {
-                            onTextChange(transformed.text)
+        if (!isEditing && hasMentions) {
+            Text(
+                text = inlineAnnotatedString,
+                style = TextStyle(
+                    fontFamily = currentTheme.fontFamily,
+                    fontSize = 15.sp,
+                    lineHeight = 24.sp,
+                    color = currentTheme.textPrimary
+                ),
+                onTextLayout = { textLayoutResult = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+                    .pointerInput(block.text) {
+                        detectTapGestures { tapOffset ->
+                            val layout = textLayoutResult ?: return@detectTapGestures
+                            val charOffset = layout.getOffsetForPosition(tapOffset)
+                            val annotations = inlineAnnotatedString.getStringAnnotations(
+                                tag = "mention",
+                                start = charOffset,
+                                end = charOffset
+                            )
+                            val mentionAnnotation = annotations.firstOrNull()
+                            if (mentionAnnotation != null) {
+                                val parsed = MentionParser.parseAnnotation(mentionAnnotation.item)
+                                if (parsed != null) {
+                                    MentionActionHandler.openMention(context, parsed)
+                                    return@detectTapGestures
+                                }
+                            }
+                            val transformedResult = visualTransformation.filter(AnnotatedString(block.text))
+                            val originalOffset = transformedResult.offsetMapping.transformedToOriginal(charOffset)
+                            textFieldValue = textFieldValue.copy(
+                                selection = TextRange(originalOffset.coerceIn(0, block.text.length))
+                            )
+                            isEditing = true
                         }
                     }
+            )
+        } else {
+            BasicTextField(
+                value = textFieldValue,
+                onValueChange = { newValue ->
+                    val transformed = BulletTextHelper.handleValueChange(textFieldValue, newValue) ?: newValue
+                    textFieldValue = transformed
+                    onFocusChanged(true, transformed.selection.start)
+                    if (transformed.text != block.text) {
+                        onTextChange(transformed.text)
+                    }
+                    val trigger = MentionParser.detectMentionTrigger(transformed.text, transformed.selection.start)
+                    onMentionTrigger?.invoke(trigger)
+                },
+                visualTransformation = visualTransformation,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focusRequester)
+                    .onPreviewKeyEvent { event ->
+                        BulletTextHelper.handleKeyEvent(event, textFieldValue) { transformed ->
+                            textFieldValue = transformed
+                            onFocusChanged(true, transformed.selection.start)
+                            if (transformed.text != block.text) {
+                                onTextChange(transformed.text)
+                            }
+                            val trigger = MentionParser.detectMentionTrigger(transformed.text, transformed.selection.start)
+                            onMentionTrigger?.invoke(trigger)
+                        }
+                    }
+                    .onFocusChanged { focusState ->
+                        isFocused = focusState.isFocused
+                        if (focusState.isFocused) {
+                            hasBeenFocused = true
+                            onFocusChanged(true, textFieldValue.selection.start)
+                        } else if (hasBeenFocused) {
+                            isEditing = false
+                            hasBeenFocused = false
+                            onFocusChanged(false, textFieldValue.selection.start)
+                        }
+                    }
+                    .padding(vertical = 4.dp),
+                textStyle = TextStyle(
+                    fontFamily = currentTheme.fontFamily,
+                    fontSize = 15.sp,
+                    lineHeight = 24.sp,
+                    color = currentTheme.textPrimary
+                ),
+                cursorBrush = SolidColor(currentTheme.cursorColor),
+                decorationBox = { innerTextField ->
+                    if (textFieldValue.text.isEmpty() && showPlaceholder) {
+                        Text(
+                            text = "Start writing or use the toolbar below...",
+                            fontFamily = currentTheme.fontFamily,
+                            fontSize = 14.5.sp,
+                            color = currentTheme.textSecondary.copy(alpha = 0.5f)
+                        )
+                    }
+                    innerTextField()
                 }
-                .onFocusChanged { focusState ->
-                    onFocusChanged(focusState.isFocused, textFieldValue.selection.start)
+            )
+        }
+
+        val activeMentionUnderCursor = remember(textFieldValue.selection.start, block.text) {
+            if (isFocused && textFieldValue.selection.collapsed) {
+                val cursor = textFieldValue.selection.start
+                MentionParser.parseMentions(block.text).firstOrNull {
+                    cursor in it.startIndex..it.endIndex
                 }
-                .padding(vertical = 4.dp),
-            textStyle = TextStyle(
-                fontFamily = currentTheme.fontFamily,
-                fontSize = 15.sp,
-                lineHeight = 24.sp,
-                color = currentTheme.textPrimary
-            ),
-            cursorBrush = SolidColor(currentTheme.cursorColor),
-            decorationBox = { innerTextField ->
-                if (textFieldValue.text.isEmpty() && showPlaceholder) {
+            } else null
+        }
+
+        if (activeMentionUnderCursor != null) {
+            Spacer(modifier = Modifier.height(3.dp))
+            val tint = when (activeMentionUnderCursor.type) {
+                MentionType.CONTACT -> ElectricGreen
+                MentionType.APP -> ElectricCyan
+                MentionType.CALENDAR -> ElectricAmber
+            }
+            Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = tint.copy(alpha = 0.14f),
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable {
+                        MentionActionHandler.openMention(context, activeMentionUnderCursor)
+                    }
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
+                        contentDescription = null,
+                        tint = tint,
+                        modifier = Modifier.size(11.dp)
+                    )
+                    Spacer(modifier = Modifier.width(3.dp))
                     Text(
-                        text = "Start writing or use the toolbar below...",
+                        text = "Open @${activeMentionUnderCursor.title}",
                         fontFamily = currentTheme.fontFamily,
-                        fontSize = 14.5.sp,
-                        color = currentTheme.textSecondary.copy(alpha = 0.5f)
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 11.sp,
+                        color = tint
                     )
                 }
-                innerTextField()
             }
-        )
+        }
     }
 }
 
@@ -2009,8 +2531,7 @@ private fun LockedNoteBarrier(
         ) {
             Surface(
                 shape = CircleShape,
-                color = if (isDark) AmoledBlack else currentTheme.border.copy(alpha = 0.5f),
-                border = BorderStroke(0.6.dp, if (isDark) Color(0xFF1E1E24) else currentTheme.border),
+                color = if (isDark) AmoledBlack else Color(0xFFE4E4E7),
                 modifier = Modifier.size(84.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {

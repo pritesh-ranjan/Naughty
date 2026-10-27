@@ -7,7 +7,6 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -34,7 +33,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,8 +49,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.example.naughty.ui.components.canScheduleExactAlarms
+import com.example.naughty.ui.components.hasCalendarPermission
+import com.example.naughty.ui.components.hasContactsPermission
+import com.example.naughty.ui.components.hasMicrophonePermission
 import com.example.naughty.ui.components.hasNotificationPermission
 import com.example.naughty.ui.components.hasUsageStatsPermission
+import com.example.naughty.ui.components.isBatteryOptimizationIgnored
+import com.example.naughty.ui.components.requestIgnoreBatteryOptimization
 import com.example.naughty.ui.theme.AmoledBlack
 import com.example.naughty.ui.theme.ElectricAmber
 import com.example.naughty.ui.theme.ElectricGreen
@@ -107,21 +119,33 @@ fun AboutAndPrivacyDialog(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val isDark = isAppInDarkTheme()
 
-    val hasUsageStats = remember { hasUsageStatsPermission(context) }
-    val hasNotifications = remember { hasNotificationPermission(context) }
-    val hasMicrophone = remember {
-        ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.RECORD_AUDIO
-        ) == PackageManager.PERMISSION_GRANTED
-    }
-    val canScheduleExactAlarm = remember {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val am = context.getSystemService(Context.ALARM_SERVICE) as? android.app.AlarmManager
-            am?.canScheduleExactAlarms() ?: true
-        } else true
+    var hasUsageStats by remember { mutableStateOf(hasUsageStatsPermission(context)) }
+    var hasNotifications by remember { mutableStateOf(hasNotificationPermission(context)) }
+    var hasBatteryExemption by remember { mutableStateOf(isBatteryOptimizationIgnored(context)) }
+    var hasMicrophone by remember { mutableStateOf(hasMicrophonePermission(context)) }
+    var canScheduleExactAlarm by remember { mutableStateOf(canScheduleExactAlarms(context)) }
+    var hasContacts by remember { mutableStateOf(hasContactsPermission(context)) }
+    var hasCalendar by remember { mutableStateOf(hasCalendarPermission(context)) }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                hasUsageStats = hasUsageStatsPermission(context)
+                hasNotifications = hasNotificationPermission(context)
+                hasBatteryExemption = isBatteryOptimizationIgnored(context)
+                hasMicrophone = hasMicrophonePermission(context)
+                canScheduleExactAlarm = canScheduleExactAlarms(context)
+                hasContacts = hasContactsPermission(context)
+                hasCalendar = hasCalendarPermission(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
     }
 
     AlertDialog(
@@ -172,7 +196,6 @@ fun AboutAndPrivacyDialog(
                 Surface(
                     shape = RoundedCornerShape(12.dp),
                     color = if (isDark) Color(0xFF0C0C0E) else Color(0xFFF4F4F6),
-                    border = BorderStroke(0.6.dp, if (isDark) Color(0xFF1E1E24) else Color(0xFFE4E4E7)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
@@ -209,7 +232,6 @@ fun AboutAndPrivacyDialog(
                 Surface(
                     shape = RoundedCornerShape(12.dp),
                     color = if (isDark) Color(0xFF0C0C0E) else Color(0xFFF4F4F6),
-                    border = BorderStroke(0.6.dp, if (isDark) Color(0xFF1E1E24) else Color(0xFFE4E4E7)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
@@ -234,7 +256,14 @@ fun AboutAndPrivacyDialog(
                                 label = "Usage",
                                 granted = hasUsageStats,
                                 onClick = {
-                                    context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+                                    try {
+                                        val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
+                                            data = Uri.parse("package:${context.packageName}")
+                                        }
+                                        context.startActivity(intent)
+                                    } catch (_: Exception) {
+                                        context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+                                    }
                                 }
                             )
                             PermissionChip(
@@ -253,6 +282,20 @@ fun AboutAndPrivacyDialog(
                                     }
                                 }
                             )
+                            PermissionChip(
+                                modifier = Modifier.weight(1f),
+                                label = "Battery",
+                                granted = hasBatteryExemption,
+                                onClick = {
+                                    requestIgnoreBatteryOptimization(context)
+                                }
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
                             PermissionChip(
                                 modifier = Modifier.weight(1f),
                                 label = "Alarms",
@@ -276,6 +319,32 @@ fun AboutAndPrivacyDialog(
                                 }
                             )
                         }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            PermissionChip(
+                                modifier = Modifier.weight(1f),
+                                label = "Contacts",
+                                granted = hasContacts,
+                                onClick = {
+                                    context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                        data = Uri.fromParts("package", context.packageName, null)
+                                    })
+                                }
+                            )
+                            PermissionChip(
+                                modifier = Modifier.weight(1f),
+                                label = "Calendar",
+                                granted = hasCalendar,
+                                onClick = {
+                                    context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                        data = Uri.fromParts("package", context.packageName, null)
+                                    })
+                                }
+                            )
+                        }
                     }
                 }
 
@@ -283,7 +352,6 @@ fun AboutAndPrivacyDialog(
                 Surface(
                     shape = RoundedCornerShape(12.dp),
                     color = if (isDark) Color(0xFF0C0C0E) else Color(0xFFF4F4F6),
-                    border = BorderStroke(0.6.dp, if (isDark) Color(0xFF1E1E24) else Color(0xFFE4E4E7)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
@@ -339,12 +407,7 @@ private fun PermissionChip(
             .clip(RoundedCornerShape(8.dp))
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(8.dp),
-        color = if (isDark) Color(0xFF16161A) else Color(0xFFECECEF),
-        border = BorderStroke(
-            0.5.dp,
-            if (granted) (if (isDark) ElectricGreen.copy(alpha = 0.4f) else ElectricGreen.copy(alpha = 0.6f))
-            else (if (isDark) Color(0xFF2C2C34) else Color(0xFFD4D4D8))
-        )
+        color = if (isDark) Color(0xFF16161A) else Color(0xFFECECEF)
     ) {
         Row(
             modifier = Modifier.padding(vertical = 7.dp, horizontal = 4.dp),

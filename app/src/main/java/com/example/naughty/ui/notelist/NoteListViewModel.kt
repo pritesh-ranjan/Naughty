@@ -45,10 +45,40 @@ class NoteListViewModel(
         ?.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
         ?: MutableStateFlow(0)
 
+    val ctsClipCount: StateFlow<Int> = noteRepository.countCtsCards()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    private var lastHandledClip: String? = null
+
+    suspend fun isClipRecorded(text: String): Boolean {
+        val trimmed = text.trim()
+        if (trimmed.isBlank() || trimmed == lastHandledClip) return true
+        return noteRepository.isClipAlreadyRecorded(trimmed)
+    }
+
+    fun markClipAsHandled(text: String) {
+        lastHandledClip = text.trim()
+    }
+
+    suspend fun getOrCreateCtsNoteId(): String {
+        return noteRepository.getOrCreateDedicatedCtsNote().metadata.id
+    }
+
+    suspend fun appendCtsClip(sourceAppName: String, text: String): String {
+        val updated = noteRepository.appendCtsCard(sourceAppName, text)
+        markClipAsHandled(text)
+        return updated.id
+    }
+
     private var allActiveNotes: List<NoteMetadata> = emptyList()
     private var allContents: MutableMap<String, String> = mutableMapOf()
 
     init {
+        viewModelScope.launch {
+            noteRepository.adoptExistingTodoNoteIfPresent()
+            noteRepository.getOrCreateDedicatedCtsNote()
+        }
+
         viewModelScope.launch {
             noteRepository.getAllActive().collect { notes ->
                 allActiveNotes = notes
@@ -87,6 +117,11 @@ class NoteListViewModel(
         val boundApps = _uiState.value.boundApps
 
         val filtered = allActiveNotes.filter { note ->
+            // Hide dedicated Circle to Search note from normal note list / home page
+            if (note.cardType == "circle_to_search" || note.title.trim().equals("circle to search", ignoreCase = true)) {
+                return@filter false
+            }
+
             val content = allContents[note.id] ?: ""
             val apps = boundApps[note.id] ?: emptyList()
             val matchesQuery = query.isEmpty() ||
@@ -94,9 +129,10 @@ class NoteListViewModel(
                     content.lowercase().contains(query) ||
                     apps.any { it.lowercase().contains(query) }
 
+            val isTodoOrChecklist = note.cardType == "todo" || note.cardType == "checklist" || content.contains("- [")
             val matchesPage = when (page) {
-                1 -> note.cardType == "checklist" || content.contains("- [")
-                2 -> note.cardType != "checklist" && !content.contains("- [")
+                1 -> isTodoOrChecklist
+                2 -> !isTodoOrChecklist
                 3 -> note.isPinned
                 else -> true // Page 0: All
             }

@@ -1,7 +1,6 @@
 package com.example.naughty.ui.notelist
 
 import android.net.Uri
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -13,6 +12,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -54,6 +54,9 @@ import androidx.compose.ui.unit.sp
 import com.example.naughty.data.local.NoteMetadata
 import com.example.naughty.ui.editor.EditorBlockParser
 import com.example.naughty.ui.editor.InlineReminderParser
+import com.example.naughty.ui.editor.MentionActionHandler
+import com.example.naughty.ui.editor.MentionChip
+import com.example.naughty.ui.editor.MentionParser
 import com.example.naughty.ui.theme.ElectricAmber
 import com.example.naughty.ui.theme.ElectricCyan
 import com.example.naughty.ui.theme.ElectricGreen
@@ -99,8 +102,7 @@ fun NoteCard(
                 }
             ),
         shape = RoundedCornerShape(20.dp),
-        color = palette.surface,
-        border = BorderStroke(0.6.dp, palette.border)
+        color = palette.surface
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp)
@@ -115,7 +117,7 @@ fun NoteCard(
                     onTogglePin = onTogglePin
                 )
             } else {
-                val isChecklist = note.cardType == "checklist" || isChecklistContent(rawContent)
+                val isChecklist = note.cardType == "todo" || note.cardType == "checklist" || isChecklistContent(rawContent)
 
                 if (isChecklist) {
                     ChecklistCardContent(
@@ -317,22 +319,51 @@ private fun ChecklistCardContent(
     onImageClick: ((String) -> Unit)? = null
 ) {
     val displayTitle = if (note.title.equals("New thought", ignoreCase = true) || note.title.equals("Untitled", ignoreCase = true)) "" else note.title
+    val isTodo = note.cardType == "todo"
+    val totalCount = remember(rawContent) {
+        rawContent.lines().count { it.trim().startsWith("- [") && it.substringAfter("] ").isNotBlank() }
+    }
+    val doneCount = remember(rawContent) {
+        rawContent.lines().count { it.trim().startsWith("- [x]", ignoreCase = true) && it.substringAfter("] ").isNotBlank() }
+    }
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (displayTitle.isNotBlank()) {
-            Text(
-                text = displayTitle,
-                style = MaterialTheme.typography.titleLarge,
-                color = palette.textPrimary,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 17.5.sp,
-                modifier = Modifier.weight(1f)
-            )
-        } else {
-            Spacer(modifier = Modifier.weight(1f))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.weight(1f)
+        ) {
+            if (isTodo) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = if (isDark) ElectricGreen.copy(alpha = 0.16f) else ElectricGreen.copy(alpha = 0.12f),
+                    modifier = Modifier.padding(end = 8.dp)
+                ) {
+                    Text(
+                        text = if (totalCount > 0) "TODO $doneCount/$totalCount" else "TODO",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = ElectricGreen,
+                        fontSize = 10.5.sp,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+            }
+
+            if (displayTitle.isNotBlank()) {
+                Text(
+                    text = displayTitle,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = palette.textPrimary,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 17.5.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
 
         IconButton(
@@ -361,12 +392,35 @@ private fun ChecklistCardContent(
         }.take(6)
     }
 
+    if (lines.isEmpty()) {
+        val nonChecklistPreview = remember(rawContent) {
+            rawContent.lines()
+                .map { it.trim() }
+                .filter { it.isNotBlank() && !it.startsWith("![") && !it.startsWith("[🎤") }
+                .take(3)
+                .joinToString("\n")
+        }
+        if (nonChecklistPreview.isNotBlank()) {
+            Text(
+                text = nonChecklistPreview,
+                style = MaterialTheme.typography.bodyMedium,
+                color = palette.textSecondary,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+                fontSize = 14.sp
+            )
+        }
+    }
+
     Column(modifier = Modifier.fillMaxWidth()) {
         lines.forEach { line ->
             val isChecked = line.contains("- [x]", ignoreCase = true)
             val rawItemText = line.substringAfter("] ").trim()
             val inlineReminder = remember(rawItemText) { InlineReminderParser.extractFirstReminder(rawItemText) }
-            val itemText = remember(rawItemText) { InlineReminderParser.removeReminderFromLine(rawItemText) }
+            val itemAnnotatedText = remember(rawItemText) {
+                val withoutReminder = InlineReminderParser.removeReminderFromLine(rawItemText)
+                MentionParser.buildInlineAnnotatedString(withoutReminder)
+            }
 
             Row(
                 verticalAlignment = Alignment.Top,
@@ -392,7 +446,7 @@ private fun ChecklistCardContent(
                 Spacer(modifier = Modifier.width(8.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = itemText,
+                        text = itemAnnotatedText,
                         style = MaterialTheme.typography.bodyMedium,
                         color = if (isChecked) palette.textSecondary else palette.textPrimary,
                         textDecoration = if (isChecked) TextDecoration.None else null,
@@ -458,6 +512,7 @@ private fun ChecklistCardContent(
             isDark = isDark
         )
     }
+
 
     Spacer(modifier = Modifier.height(8.dp))
 
@@ -576,9 +631,12 @@ private fun MarkdownNoteCardContent(
     }
 
     val previewText = remember(rawContent) {
-        InlineReminderParser.cleanAllReminders(rawContent)
+        val withoutReminders = InlineReminderParser.cleanAllReminders(rawContent)
+        val withoutMedia = withoutReminders
             .replace(Regex("!\\[.*?\\]\\(.*?\\)"), "") // remove image syntax
             .replace(Regex("\\[🎤\\s*Voice Note\\]\\(.*?\\)", RegexOption.IGNORE_CASE), "") // remove voice note syntax
+        val withoutMentions = MentionParser.cleanMentions(withoutMedia)
+        withoutMentions
             .replace(Regex("[#*_~`>\\[\\]()]"), "")
             .lines()
             .map { it.trim() }
@@ -599,6 +657,7 @@ private fun MarkdownNoteCardContent(
             lineHeight = 20.sp
         )
     }
+
 
     Spacer(modifier = Modifier.height(8.dp))
 
@@ -699,7 +758,6 @@ fun VoiceNoteCardBadge(
     Surface(
         shape = RoundedCornerShape(12.dp),
         color = if (isDark) accent.copy(alpha = 0.12f) else accent.copy(alpha = 0.08f),
-        border = BorderStroke(0.6.dp, accent.copy(alpha = 0.28f)),
         modifier = modifier.fillMaxWidth()
     ) {
         Row(

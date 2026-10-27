@@ -2,7 +2,6 @@ package com.example.naughty.ui.editor
 
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -34,7 +33,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -236,7 +234,6 @@ fun ReminderBottomSheet(
             Surface(
                 shape = RoundedCornerShape(14.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
@@ -384,7 +381,6 @@ fun ReminderBottomSheet(
                 Surface(
                     shape = RoundedCornerShape(12.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
                     modifier = Modifier
                         .weight(1.3f)
                         .clip(RoundedCornerShape(12.dp))
@@ -417,7 +413,6 @@ fun ReminderBottomSheet(
                 Surface(
                     shape = RoundedCornerShape(12.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
                     modifier = Modifier
                         .weight(1f)
                         .clip(RoundedCornerShape(12.dp))
@@ -452,14 +447,14 @@ fun ReminderBottomSheet(
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 // Secondary: Add to Calendar
-                OutlinedButton(
+                Button(
                     onClick = {
                         onSetReminder(selectedMillis, true, reminderText.trim())
                         onDismiss()
                     },
                     shape = RoundedCornerShape(14.dp),
-                    border = BorderStroke(1.2.dp, MaterialTheme.colorScheme.primary),
-                    colors = ButtonDefaults.outlinedButtonColors(
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
                         contentColor = MaterialTheme.colorScheme.primary
                     ),
                     modifier = Modifier
@@ -509,14 +504,14 @@ fun ReminderBottomSheet(
 
             if (onDeleteReminder != null) {
                 Spacer(modifier = Modifier.height(10.dp))
-                OutlinedButton(
+                Button(
                     onClick = {
                         onDeleteReminder()
                         onDismiss()
                     },
                     shape = RoundedCornerShape(14.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
-                    colors = ButtonDefaults.outlinedButtonColors(
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.14f),
                         contentColor = MaterialTheme.colorScheme.error
                     ),
                     modifier = Modifier
@@ -548,7 +543,6 @@ private fun PresetChip(
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
         modifier = Modifier
             .clip(RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)

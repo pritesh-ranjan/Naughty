@@ -2,6 +2,8 @@ package com.example.naughty.ui.editor
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
 import androidx.core.content.FileProvider
 import java.io.File
 import androidx.lifecycle.ViewModel
@@ -19,6 +21,7 @@ import kotlinx.coroutines.withContext
 
 import com.example.naughty.notification.ReminderManager
 import com.example.naughty.ui.theme.NoteThemeRegistry
+import com.example.naughty.util.NotePdfGenerator
 
 data class EditorUiState(
     val noteId: String = "",
@@ -327,6 +330,20 @@ class NoteEditorViewModel(
         }
         updateBlocksInternal(currentBlocks)
         return newChecklistId
+    }
+
+    fun insertTextBlockAfter(blockId: String): String {
+        val currentBlocks = _uiState.value.blocks.toMutableList()
+        val index = currentBlocks.indexOfFirst { it.id == blockId }
+        val newBlockId = java.util.UUID.randomUUID().toString()
+        val newBlock = EditorBlock.Text(id = newBlockId, text = "")
+        if (index >= 0) {
+            currentBlocks.add(index + 1, newBlock)
+        } else {
+            currentBlocks.add(newBlock)
+        }
+        updateBlocksInternal(currentBlocks)
+        return newBlockId
     }
 
     fun updateChecklistText(blockId: String, newText: String) {
@@ -732,6 +749,71 @@ class NoteEditorViewModel(
         _uiState.value = _uiState.value.copy(isSaving = false)
     }
 
+    fun ensureTrailingTodoItem(): String {
+        val currentBlocks = _uiState.value.blocks.toMutableList()
+        val lastBlock = currentBlocks.lastOrNull()
+        if (lastBlock is EditorBlock.Checklist && lastBlock.text.isBlank()) {
+            return lastBlock.id
+        }
+        val newChecklistId = java.util.UUID.randomUUID().toString()
+        val newBlock = EditorBlock.Checklist(id = newChecklistId, isChecked = false, text = "")
+        currentBlocks.add(newBlock)
+        updateBlocksInternal(currentBlocks)
+        return newChecklistId
+    }
+
+    fun convertPlainTextBlocksToTodos() {
+        val currentBlocks = _uiState.value.blocks
+        val newBlocks = mutableListOf<EditorBlock>()
+        for (block in currentBlocks) {
+            when (block) {
+                is EditorBlock.Checklist -> newBlocks.add(block)
+                is EditorBlock.Text -> {
+                    val lines = block.text.lines()
+                    for (line in lines) {
+                        if (line.isNotBlank()) {
+                            newBlocks.add(
+                                EditorBlock.Checklist(
+                                    id = java.util.UUID.randomUUID().toString(),
+                                    isChecked = false,
+                                    text = line.trim()
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        if (newBlocks.isEmpty()) {
+            newBlocks.add(EditorBlock.Checklist(id = java.util.UUID.randomUUID().toString(), isChecked = false, text = ""))
+        }
+        updateBlocksInternal(newBlocks)
+    }
+
+    fun deleteIfEmpty(onDone: () -> Unit) {
+        val state = _uiState.value
+        val hasAttachedImages = EditorBlockParser.extractImages(state.content).isNotEmpty()
+        val hasAttachedVoice = EditorBlockParser.extractVoiceNotes(state.content).isNotEmpty()
+        val hasTitle = state.title.isNotBlank() && !state.title.equals("Untitled", ignoreCase = true)
+        val hasText = state.blocks.any {
+            when (it) {
+                is EditorBlock.Text -> it.text.isNotBlank()
+                is EditorBlock.Checklist -> it.text.isNotBlank()
+            }
+        }
+
+        if (!hasTitle && !hasText && !hasAttachedImages && !hasAttachedVoice) {
+            autoSaveJob?.cancel()
+            viewModelScope.launch {
+                noteRepository.permanentlyDeleteNote(state.noteId)
+                onDone()
+            }
+        } else {
+            saveNow()
+            onDone()
+        }
+    }
+
     fun shareNoteAsText(context: Context) {
         val title = _uiState.value.title.trim().ifBlank { "Untitled" }
         val content = _uiState.value.content.trim()
@@ -781,6 +863,75 @@ class NoteEditorViewModel(
             chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             withContext(Dispatchers.Main) {
                 context.startActivity(chooser)
+            }
+        }
+    }
+
+    fun getSuggestedPdfFileName(): String {
+        val title = _uiState.value.title.trim()
+        return "${NotePdfGenerator.sanitizeFileName(title)}.pdf"
+    }
+
+    fun shareNoteAsPdf(context: Context, isDarkDefault: Boolean) {
+        saveNow()
+        val state = _uiState.value
+        val theme = NoteThemeRegistry.getTheme(state.colorTheme, isDarkDefault)
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val pdfFile = NotePdfGenerator.generateToCacheFile(
+                    context = context,
+                    title = state.title.ifBlank { "Untitled" },
+                    content = state.content,
+                    theme = theme
+                )
+                val uri = FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    pdfFile
+                )
+                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = "application/pdf"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    putExtra(Intent.EXTRA_SUBJECT, state.title.ifBlank { "Untitled Note" })
+                    clipData = android.content.ClipData.newRawUri("Note PDF", uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                val chooser = Intent.createChooser(shareIntent, "Share Note as PDF").apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                withContext(Dispatchers.Main) {
+                    context.startActivity(chooser)
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Failed to generate PDF: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    fun saveNoteAsPdf(context: Context, destinationUri: Uri, isDarkDefault: Boolean) {
+        saveNow()
+        val state = _uiState.value
+        val theme = NoteThemeRegistry.getTheme(state.colorTheme, isDarkDefault)
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                context.contentResolver.openOutputStream(destinationUri)?.use { out ->
+                    NotePdfGenerator.generateToStream(
+                        context = context,
+                        title = state.title.ifBlank { "Untitled" },
+                        content = state.content,
+                        theme = theme,
+                        outputStream = out
+                    )
+                }
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "PDF saved successfully", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Failed to save PDF: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }

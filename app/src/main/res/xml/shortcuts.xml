@@ -9,10 +9,27 @@
         <intent
             android:action="android.intent.action.VIEW"
             android:targetPackage="com.example.naughty"
-            android:targetClass="com.example.naughty.MainActivity">
+            android:targetClass="com.example.naughty.QuickNotePopupActivity">
             <extra
                 android:name="action"
-                android:value="create_note" />
+                android:value="quick_new_note" />
+        </intent>
+        <categories android:name="android.shortcut.conversation" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="shortcut_todo_note"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_todo"
+        android:shortcutShortLabel="@string/shortcut_todo"
+        android:shortcutLongLabel="@string/shortcut_todo_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.example.naughty"
+            android:targetClass="com.example.naughty.QuickNotePopupActivity">
+            <extra
+                android:name="action"
+                android:value="quick_todo_note" />
         </intent>
         <categories android:name="android.shortcut.conversation" />
     </shortcut>

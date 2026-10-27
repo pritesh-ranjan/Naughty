@@ -13,7 +13,6 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -221,7 +220,6 @@ fun VoiceNotePlayer(
     } else 0f
 
     val cardBg = if (isDark) Color(0xFF141418) else Color(0xFFF4F4F6)
-    val cardBorder = if (isDark) Color(0xFF26262E) else Color(0xFFE4E4E8)
     val playedColor = accentColor
     val unplayedColor = if (isDark) Color(0xFF3F3F46) else Color(0xFFD4D4D8)
 
@@ -230,8 +228,7 @@ fun VoiceNotePlayer(
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp)),
         shape = RoundedCornerShape(18.dp),
-        color = cardBg,
-        border = BorderStroke(0.6.dp, cardBorder)
+        color = cardBg
     ) {
         Column(
             modifier = Modifier

@@ -1,9 +1,7 @@
 package com.example.naughty.ui.binding
 
 import android.app.DatePickerDialog
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -171,8 +169,7 @@ fun BindingSheet(
                             .clip(RoundedCornerShape(14.dp))
                             .clickable { showExpirationDropdown = true },
                         shape = RoundedCornerShape(14.dp),
-                        color = if (isDark) Color(0xFF0C0C0E) else Color(0xFFF4F4F6),
-                        border = BorderStroke(0.6.dp, if (isDark) Color(0xFF1E1E24) else Color(0xFFE4E4E7))
+                        color = if (isDark) Color(0xFF0C0C0E) else Color(0xFFF4F4F6)
                     ) {
                         Row(
                             modifier = Modifier
@@ -375,8 +372,7 @@ fun BindingSheet(
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp),
-                        color = if (isDark) Color(0xFF0C0C0E) else Color(0xFFF4F4F6),
-                        border = BorderStroke(0.6.dp, if (isDark) Color(0xFF1E1E24) else Color(0xFFE4E4E7))
+                        color = if (isDark) Color(0xFF0C0C0E) else Color(0xFFF4F4F6)
                     ) {
                         Column(modifier = Modifier.padding(14.dp)) {
                             Row(
@@ -493,8 +489,7 @@ fun BindingSheet(
                             .fillMaxWidth()
                             .clickable { datePickerDialog.show() },
                         shape = RoundedCornerShape(14.dp),
-                        color = if (isDark) Color(0xFF0C0C0E) else Color(0xFFF4F4F6),
-                        border = BorderStroke(0.6.dp, if (isDark) Color(0xFF1E1E24) else Color(0xFFE4E4E7))
+                        color = if (isDark) Color(0xFF0C0C0E) else Color(0xFFF4F4F6)
                     ) {
                         Row(
                             modifier = Modifier
@@ -539,8 +534,7 @@ fun BindingSheet(
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp),
-                        color = if (isDark) Color(0xFF0C0C0E) else Color(0xFFF4F4F6),
-                        border = BorderStroke(0.6.dp, if (isDark) Color(0xFF1E1E24) else Color(0xFFE4E4E7))
+                        color = if (isDark) Color(0xFF0C0C0E) else Color(0xFFF4F4F6)
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
@@ -665,7 +659,6 @@ fun BindingSheet(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(14.dp))
                     .background(if (isDark) Color(0xFF0C0C0E) else Color(0xFFF4F4F6))
-                    .border(BorderStroke(0.6.dp, if (isDark) Color(0xFF1E1E24) else Color(0xFFE4E4E7)), RoundedCornerShape(14.dp))
                     .padding(horizontal = 14.dp, vertical = 12.dp),
                 decorationBox = { innerTextField ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -812,8 +805,7 @@ fun BindingSheet(
                             if (alreadyBound) {
                                 Surface(
                                     shape = RoundedCornerShape(8.dp),
-                                    color = ElectricGreen.copy(alpha = 0.12f),
-                                    border = BorderStroke(0.5.dp, ElectricGreen.copy(alpha = 0.35f))
+                                    color = ElectricGreen.copy(alpha = 0.12f)
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,

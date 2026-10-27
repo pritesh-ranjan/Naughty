@@ -1,24 +1,19 @@
 package com.example.naughty
 
 import android.app.Application
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
+import com.example.naughty.binding.DetectorForegroundService
 
 class NaughtyApp : Application() {
 
     lateinit var container: AppContainer
         private set
 
-    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
 
-        // Launch binding detector and notification manager in application scope
-        container.bindingDetector.start(appScope)
-        container.contextNotificationManager.start(appScope)
+        // Start sticky foreground service which owns the lifecycle of BindingDetector and ContextNotificationManager
+        DetectorForegroundService.start(this)
     }
 }
 

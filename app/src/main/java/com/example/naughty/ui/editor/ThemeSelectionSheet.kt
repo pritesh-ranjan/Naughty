@@ -1,8 +1,6 @@
 package com.example.naughty.ui.editor
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -141,11 +139,7 @@ private fun ThemePreviewCard(
             .clip(RoundedCornerShape(16.dp))
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
-        color = theme.surface,
-        border = BorderStroke(
-            if (isSelected) 2.dp else 0.6.dp,
-            if (isSelected) theme.accent else theme.border
-        )
+        color = theme.surface
     ) {
         Box(
             modifier = Modifier

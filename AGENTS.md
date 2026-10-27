@@ -15,6 +15,7 @@ This document serves as the single source of truth for AI agents and human engin
 * **Target & Compile SDK**: `36` (Android 16 / Vanilla Ice Cream / Upside Down Cake + back-compat down to Android 7.0 / API 24).
 * **Kotlin**: `2.3.20` with Compose Compiler plugin and KSP `2.3.12`.
 * **Android Gradle Plugin (AGP)**: `9.0.1`.
+* **Primary Emulator AVD**: `Pixel_10a` located at `~/Library/Android/sdk/emulator/emulator -avd Pixel_10a`.
 
 > [!IMPORTANT]
 > **Always export `JAVA_HOME` before invoking `./gradlew` commands** in your shell sessions:
@@ -41,6 +42,23 @@ This document serves as the single source of truth for AI agents and human engin
   * `./build_release.sh --install`: Compiles and automatically installs the release APK onto the connected adb device/emulator.
 * **Tracked Version File**:
   `version.properties` tracks `VERSION_CODE` (e.g. `3`) and `VERSION_NAME` (e.g. `2.1`).
+
+### 1.3 Android Emulator & ADB Operations
+* **Configured AVD**: `Pixel_10a`.
+* Launch emulator command:
+  ```bash
+  export ANDROID_HOME="$HOME/Library/Android/sdk"
+  "$ANDROID_HOME/emulator/emulator" -avd Pixel_10a
+  ```
+* Wait for boot completion:
+  ```bash
+  export ANDROID_HOME="$HOME/Library/Android/sdk"
+  "$ANDROID_HOME/platform-tools/adb" wait-for-device shell 'while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done;'
+  ```
+* **Autonomous ADB & Emulator Operations (No Permission Required)**:
+  * Taking screenshots inside `adb` (`adb shell screencap -p /sdcard/screen.png` and pulling) does **not** require user permission.
+  * Interacting with Naughty or the Android OS via `adb` in the emulator (`adb shell input tap/swipe/text/keyevent`, `adb shell am start`, `adb shell uiautomator dump`, `adb install -r`, etc.) does **not** require user permission.
+  * Execute all emulator and adb verification/interaction commands autonomously without prompting or asking the user for permission.
 
 ---
 
@@ -131,23 +149,34 @@ Existing Migrations Record:
 ### 4.1 Context-Aware App Binding Engine
 App Binding surfaces notes as notifications when a user launches specific third-party applications (e.g., viewing a grocery list inside Instacart, or meeting notes inside Zoom).
 
-* **Detection Component**: `BindingDetector.kt`.
-* **Mechanism**: Uses `UsageStatsManager.queryEvents` polled on `Dispatchers.IO` once every second directly in `NaughtyApp.appScope`. Screen state is verified via `PowerManager.isInteractive` to halt polling when device is asleep (no battery-draining Android foreground service required).
-* **Required Permission**: `android.permission.PACKAGE_USAGE_STATS`. Handled gracefully in UI through `PermissionGate.kt`.
+* **Detection Components**: `BindingDetector.kt`, `CircleToSearchDetector.kt`, and `DetectorForegroundService.kt`.
+* **Mechanism & Process Management**:
+  * Runs a 1-second polling loop over `UsageStatsManager.queryEvents` with a 2-second sliding lookback window to prevent asynchronous IPC dropped events.
+  * Backed by `DetectorForegroundService` (`foregroundServiceType="specialUse"` with `IMPORTANCE_MIN` ongoing silent notification), preventing the Linux cgroup v2 cached-app freezer from halting detection 10s after backgrounding.
+  * Integrated with `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` in `PermissionGate` and Settings to circumvent aggressive OEM task killers (Samsung One UI Sleeping Apps, Xiaomi HyperOS/MIUI).
+  * Automatically pauses polling when the screen turns off (`PowerManager.isInteractive == false`) and resets `currentForegroundPackage = null` so waking or unlocking back into a bound app reliably re-triggers.
+* **Circle to Search Detection**:
+  * Tracks Google App surfaces (`omnient`, `lens`, `robin`, `search.assistant`).
+  * Features a 20-second watchdog auto-expiry timer (`CTS_MAX_DURATION_MS`) to automatically recover if an exit event is dropped or dismissed without an activity stop.
+* **Required Permissions**: `android.permission.PACKAGE_USAGE_STATS`, `android.permission.FOREGROUND_SERVICE`, `android.permission.FOREGROUND_SERVICE_SPECIAL_USE`, `android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`. Handled gracefully in UI through `PermissionGate.kt` and `SettingsComponents.kt`.
 * **Binding Types**:
   * `PERSISTENT`: Triggers notification whenever target app comes to foreground.
   * `ONE_SHOT`: Deactivates automatically after first trigger.
   * `expiresAt`: Optional timestamp after which binding becomes inactive.
-* **Notification Dispatcher**: `ContextNotificationManager.kt`.
-  * Channel: `naughty_context_v2`.
-  * Auto-dismisses when switching away from the bound app.
-  * Auto-timeout: 30 seconds.
+* **Notification Dispatcher & Channels**: `ContextNotificationManager.kt`.
+  * Channels:
+    * `naughty_context_v2`: "Context Notes" (`IMPORTANCE_HIGH`, `CATEGORY_REMINDER`), auto-dismisses when switching apps, 30s auto-timeout.
+    * `naughty_cts_v1`: "Circle to Search" (`IMPORTANCE_HIGH`, `CATEGORY_RECOMMENDATION`), 15s auto-timeout, prompts snippet capture after exiting CTS.
+    * `naughty_reminders_v1`: "Note Reminders" (`IMPORTANCE_HIGH`, `CATEGORY_REMINDER`).
+    * `naughty_detector_service_v1`: "Context Engine Service" (`IMPORTANCE_MIN`, `CATEGORY_SERVICE`).
+  * Capture toggle: User-facing switch in Settings ("Capture notes notification") persisted in DataStore (`CTS_NOTIFICATION_ENABLED_KEY`) allows enabling/disabling CTS exit prompt notifications.
   * Masks content if `note.metadata.isLocked == true`.
 
 ### 4.2 Hybrid Block & Raw Markdown Editor
 The note editor supports two concurrent views:
 1. **Block Mode**: Deconstructs markdown into structured interactive UI blocks (`EditorBlock.Text` and `EditorBlock.Checklist`).
    * Tapping Enter on an empty checklist item exits to a normal text line.
+   * Tapping the cross icon (`X`) on a todo/checklist item shows an immediate Toast ("Task removed") and smoothly fades out and collapses (`AnimatedVisibility` shrink & fade spec) before removing from persistence.
    * Checklists support toggling, reordering, inline reminders, and image attachments.
 2. **Raw Markdown Mode**: Direct full-text markdown editing for rapid note editing and full markdown control.
 
@@ -241,9 +270,40 @@ High-fidelity on-device voice recording with neural noise reduction and WhatsApp
   * Audio file transcription using `MediaExtractor` and PCM decoding stream via `ParcelFileDescriptor` pipe on Android 13+.
   * Watchdog timer and error handling prevent infinite loading states.
 * **App Launcher Shortcuts**:
-  * `res/xml/shortcuts.xml` defines launcher quick actions for Instant Note Creation (`action_new_note`) and Timeline Tasks (`action_timeline`).
+  * `res/xml/shortcuts.xml` defines launcher quick actions for New Note (`shortcut_new_note`), Todo List (`shortcut_todo_note`), and Timeline Tasks (`shortcut_timeline_tasks`).
 
+### 4.8 Todo-Based Notes & Miniature Popup Window Subsystem
+First-class support for dedicated Todo-based notes (`cardType = "todo"`) and isolated floating miniature popup window:
+* **Official Todo Note Resolution**:
+  * Automatically detects and adopts any active note titled `"Todo"` (case-insensitive) as the official Todo list note (`NoteRepository.adoptExistingTodoNoteIfPresent()`).
+  * If none exists when triggered via shortcut or user request, creates the official `"Todo"` note with `cardType = "todo"` and `isPinned = true`.
+  * Cards display a `"TODO"` pill badge with real-time completion counter (e.g. `2/5`) and task filter integration.
+* **Miniature Floating Popup Window (`QuickNotePopupActivity.kt`)**:
+  * Runs in its own isolated task (`taskAffinity=""`, `excludeFromRecents="true"`, theme `Theme.Naughty.QuickPopup`).
+  * Floats directly over the home screen or third-party app without bringing `MainActivity` to the foreground.
+  * Provides editable title, full block & todo checklist support, and the bottom notes bar (block menu, raw markdown toggle, checkboxes, bullets, image attachment, on-device OCR, voice note recording, inline reminders, undo/redo).
+  * Seamless "Open in App" expand action transitions into `MainActivity`'s full editor, and blank drafts are automatically cleaned up if dismissed untouched.
 
+### 4.9 First-Launch & Post-Update Feature Showcase Subsystem
+Interactive onboarding and feature highlight bottom sheet (`FeatureShowcaseSheet.kt`) automatically surfaced on fresh installations and after every application upgrade:
+* **Lifecycle & Version Tracking**:
+  * Persists `LAST_SEEN_VERSION_CODE_KEY` via `themeDataStore`.
+  * Deterministic display logic via `shouldShowFeatureShowcase(lastSeen, currentCode)`: triggers if `lastSeen == null` (first-ever install) or `lastSeen < currentCode` (app upgrade).
+  * Suppressed automatically during direct external share intent handling (`ShareIntentHandler`) to avoid interrupting user flows, displaying as soon as the user returns to the primary experience.
+  * Tapping dismiss or acknowledgment buttons saves `currentVersionCode` into DataStore.
+* **Content Presentation**:
+  * Crisp, non-technical, easy-to-understand copy highlighting:
+    1. **App-Linked Notes (App Binding)**: Automatic contextual note surfacing on app launch.
+    2. **Circle to Search Capture**: Instant note creation prompt after exiting Circle to Search / Lens.
+    3. **Timeline Tasks**: Multi-step goals with custom stages, ordered milestones, and visual progress bars.
+    4. **Photo & Voice Notes**: Studio-clarity voice memos with neural noise reduction and interactive soundwaves.
+    5. **Offline Text Scanner (OCR)**: On-device text extraction in drafts or via the system share sheet.
+    6. **Offline Speech-to-Text**: Real-time voice-to-text dictation and file transcription without internet.
+    7. **@ Note Mentions**: Quick linking and referencing between notes and contacts.
+    8. **100% Offline & Private**: Zero cloud servers, zero telemetry, zero accounts, open Markdown storage.
+    9. **Biometric Privacy Lock & Fast Search**: Fingerprint/Face security with in-memory session unlock and universal search.
+* **On-Demand Accessibility**:
+  * Re-accessible anytime in Settings under "Feature Showcase & Key Highlights" for exploration.
 
 ---
 
@@ -254,6 +314,7 @@ app/src/main/java/com/example/naughty/
 ├── AppContainer.kt                # Dependency Injection root & Room migrations
 ├── MainActivity.kt                # Single-activity Compose entrypoint
 ├── NaughtyApp.kt                  # Application class; launches background observers
+├── QuickNotePopupActivity.kt      # Floating miniature popup for launcher shortcuts
 ├── ShareCopyTextActivity.kt       # Floating context menu "Add to Naughty"
 ├── binding/                       # App binding detection engine
 │   ├── BindingDetector.kt         # UsageStats polling loop in application scope
@@ -348,3 +409,5 @@ app/src/main/java/com/example/naughty/
    Naughty is open-source under the **MIT License**. Never include proprietary SDKs or tracking modules.
 7. **Production Signing & Package Visibility**:
    Release APKs/AABs are signed using APK Signature Schemes v2 and v3 (`release.keystore`, SHA-256 `d90ce14a4337481a80cf5e33d5df4fe8b3e88d323b152f63e4a090605e636069`, alias `androiddebugkey`). This signing key is pinned to match the user's installed package signature, ensuring seamless in-place updates (`adb install -r`) with zero data/database loss. Never switch or regenerate this keystore. App visibility is handled strictly via `<queries>` intent filters for launcher activities—never reintroduce `QUERY_ALL_PACKAGES`. Cloud backup is explicitly disabled in `data_extraction_rules.xml`.
+8. **Autonomous Emulator & ADB Operations**:
+   Taking screenshots via `adb` and interacting with the app via `adb` in the emulator (screen capture, tap/swipe/key input, activity starts, UI inspection, and app verification) does **not** require permission from the user. Run these operations autonomously without asking for approval.

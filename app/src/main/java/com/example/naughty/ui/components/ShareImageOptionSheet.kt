@@ -4,9 +4,7 @@ import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -49,7 +47,6 @@ import com.example.naughty.ui.theme.DarkElevatedSurface
 import com.example.naughty.ui.theme.ElectricAmber
 import com.example.naughty.ui.theme.ElectricCyan
 import com.example.naughty.ui.theme.ElectricGreen
-import com.example.naughty.ui.theme.StealthCardBorder
 import com.example.naughty.ui.theme.isAppInDarkTheme
 import com.example.naughty.util.ImageShareMode
 
@@ -67,7 +64,6 @@ fun ShareImageOptionSheet(
 
     val surfaceColor = if (isDark) DarkElevatedSurface else MaterialTheme.colorScheme.surface
     val cardColor = if (isDark) Color(0xFF14151B) else Color(0xFFF4F4F6)
-    val borderColor = if (isDark) StealthCardBorder else Color(0xFFE4E4E7)
     val textPrimary = if (isDark) Color.White else Color(0xFF18181B)
     val textSecondary = if (isDark) Color(0xFFA1A1AA) else Color(0xFF71717A)
 
@@ -118,8 +114,7 @@ fun ShareImageOptionSheet(
                 // Count Pill
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = cardColor,
-                    border = BorderStroke(0.8.dp, borderColor)
+                    color = cardColor
                 ) {
                     Text(
                         text = if (imageUris.size == 1) "Single Photo" else "${imageUris.size} Photos",
@@ -141,7 +136,6 @@ fun ShareImageOptionSheet(
                             .fillMaxWidth()
                             .height(130.dp)
                             .clip(RoundedCornerShape(16.dp))
-                            .border(1.dp, borderColor, RoundedCornerShape(16.dp))
                             .background(cardColor)
                     ) {
                         AttachedImageThumbnail(
@@ -162,7 +156,6 @@ fun ShareImageOptionSheet(
                                 modifier = Modifier
                                     .size(90.dp)
                                     .clip(RoundedCornerShape(14.dp))
-                                    .border(1.dp, borderColor, RoundedCornerShape(14.dp))
                                     .background(cardColor)
                             ) {
                                 AttachedImageThumbnail(
@@ -187,8 +180,7 @@ fun ShareImageOptionSheet(
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(18.dp),
-                    color = cardColor,
-                    border = BorderStroke(1.dp, borderColor)
+                    color = cardColor
                 ) {
                     Row(
                         modifier = Modifier
@@ -228,7 +220,6 @@ fun ShareImageOptionSheet(
                         title = "Attach Image",
                         description = "Create note with image attached as markdown",
                         cardColor = cardColor,
-                        borderColor = borderColor,
                         textPrimary = textPrimary,
                         textSecondary = textSecondary,
                         onClick = { onSelectMode(ImageShareMode.IMAGE_ONLY) }
@@ -241,7 +232,6 @@ fun ShareImageOptionSheet(
                         title = "Extract Text (OCR)",
                         description = "Transcribe on-device with ML Kit into a text note",
                         cardColor = cardColor,
-                        borderColor = borderColor,
                         textPrimary = textPrimary,
                         textSecondary = textSecondary,
                         onClick = { onSelectMode(ImageShareMode.OCR_ONLY) }
@@ -254,7 +244,6 @@ fun ShareImageOptionSheet(
                         title = "Both (Image & OCR Text)",
                         description = "Transcribe text and keep image attached at bottom",
                         cardColor = cardColor,
-                        borderColor = borderColor,
                         textPrimary = textPrimary,
                         textSecondary = textSecondary,
                         onClick = { onSelectMode(ImageShareMode.BOTH) }
@@ -272,7 +261,6 @@ private fun ShareOptionCard(
     title: String,
     description: String,
     cardColor: Color,
-    borderColor: Color,
     textPrimary: Color,
     textSecondary: Color,
     onClick: () -> Unit
@@ -283,8 +271,7 @@ private fun ShareOptionCard(
             .clip(RoundedCornerShape(18.dp))
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(18.dp),
-        color = cardColor,
-        border = BorderStroke(1.dp, borderColor)
+        color = cardColor
     ) {
         Row(
             modifier = Modifier

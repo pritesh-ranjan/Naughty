@@ -1,6 +1,8 @@
 package com.example.naughty.ui.notelist
 
-import androidx.compose.foundation.BorderStroke
+import android.content.ClipDescription
+import android.content.ClipboardManager
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -88,6 +90,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
 
+import com.example.naughty.ui.components.ClipSaveSheet
 import com.example.naughty.ui.components.FullscreenImageViewer
 import com.example.naughty.ui.theme.BrandTitleStyle
 import com.example.naughty.ui.theme.isAppInDarkTheme
@@ -99,6 +102,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 
@@ -114,9 +118,42 @@ fun NoteListScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val trackerCount by viewModel.trackerCount.collectAsStateWithLifecycle()
+    val ctsClipCount by viewModel.ctsClipCount.collectAsStateWithLifecycle()
 
     val listState = rememberLazyListState()
     val context = LocalContext.current
+    val clipboardManager = remember(context) {
+        context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+    }
+    var pendingClipText by remember { mutableStateOf<String?>(null) }
+    var hasPendingClip by remember { mutableStateOf(false) }
+    var showClipSaveSheet by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        val hasTextType = clipboardManager?.hasPrimaryClip() == true &&
+                (clipboardManager.primaryClipDescription?.hasMimeType(ClipDescription.MIMETYPE_TEXT_PLAIN) == true ||
+                        clipboardManager.primaryClipDescription?.hasMimeType(ClipDescription.MIMETYPE_TEXT_HTML) == true)
+        if (hasTextType) {
+            val clip = clipboardManager.primaryClip?.takeIf { it.itemCount > 0 }?.let { clipData ->
+                val item = clipData.getItemAt(0)
+                try {
+                    item?.coerceToText(context)?.toString()?.trim()
+                } catch (_: Exception) {
+                    item?.text?.toString()?.trim()
+                }
+            }
+            if (!clip.isNullOrBlank() && !viewModel.isClipRecorded(clip)) {
+                hasPendingClip = true
+                pendingClipText = clip
+            } else {
+                hasPendingClip = false
+                pendingClipText = null
+            }
+        } else {
+            hasPendingClip = false
+            pendingClipText = null
+        }
+    }
     val activity = remember(context) { context.findFragmentActivity() }
     val coroutineScope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
@@ -233,6 +270,34 @@ fun NoteListScreen(
                         HomeFeatureTiles(
                             trackerCount = trackerCount,
                             onOpenTimeline = onOpenTimeline,
+                            ctsClipCount = ctsClipCount,
+                            hasPendingCtsClip = hasPendingClip,
+                            pendingClipSourceApp = "Clipboard",
+                            onCtsTileClick = {
+                                coroutineScope.launch {
+                                    val clip = clipboardManager?.primaryClip?.takeIf { it.itemCount > 0 }?.let { clipData ->
+                                        val item = clipData.getItemAt(0)
+                                        try {
+                                            item?.coerceToText(context)?.toString()?.trim()
+                                        } catch (_: Exception) {
+                                            item?.text?.toString()?.trim()
+                                        }
+                                    }
+                                    if (!clip.isNullOrBlank() && !viewModel.isClipRecorded(clip)) {
+                                        pendingClipText = clip
+                                        showClipSaveSheet = true
+                                    } else {
+                                        val ctsId = viewModel.getOrCreateCtsNoteId()
+                                        onNoteClick(ctsId)
+                                    }
+                                }
+                            },
+                            onOpenCtsDirectly = {
+                                coroutineScope.launch {
+                                    val ctsId = viewModel.getOrCreateCtsNoteId()
+                                    onNoteClick(ctsId)
+                                }
+                            },
                             modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
                         )
                     }
@@ -260,7 +325,6 @@ fun NoteListScreen(
                                     Surface(
                                         shape = RoundedCornerShape(999.dp),
                                         color = if (isDark) ElectricGreen.copy(alpha = 0.15f) else AmoledBlack.copy(alpha = 0.08f),
-                                        border = BorderStroke(0.6.dp, if (isDark) ElectricGreen.copy(alpha = 0.4f) else AmoledBlack.copy(alpha = 0.25f)),
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(999.dp))
                                             .clickable {
@@ -403,11 +467,7 @@ fun NoteListScreen(
                     .height(56.dp)
                     .shadow(elevation = 10.dp, shape = RoundedCornerShape(28.dp)),
                 shape = RoundedCornerShape(28.dp),
-                color = if (isDark) AmoledBlack else CrystalWhite,
-                border = BorderStroke(
-                    width = 0.6.dp,
-                    color = if (isDark) Color(0xFF1E1E24) else Color(0xFFE4E4E7)
-                )
+                color = if (isDark) AmoledBlack else CrystalWhite
             ) {
                 Row(
                     modifier = Modifier
@@ -788,4 +848,27 @@ fun NoteListScreen(
         )
     }
 
+    if (showClipSaveSheet && pendingClipText != null) {
+        ClipSaveSheet(
+            clipText = pendingClipText!!,
+            sourceAppName = "Clipboard",
+            onSaveToCtsNote = {
+                val text = pendingClipText!!
+                showClipSaveSheet = false
+                pendingClipText = null
+                hasPendingClip = false
+                coroutineScope.launch {
+                    val ctsId = viewModel.appendCtsClip("Clipboard", text)
+                    android.widget.Toast.makeText(context, "Saved to Circle to Search", android.widget.Toast.LENGTH_SHORT).show()
+                    onNoteClick(ctsId)
+                }
+            },
+            onDismiss = {
+                showClipSaveSheet = false
+                pendingClipText?.let { viewModel.markClipAsHandled(it) }
+                hasPendingClip = false
+                pendingClipText = null
+            }
+        )
+    }
 }

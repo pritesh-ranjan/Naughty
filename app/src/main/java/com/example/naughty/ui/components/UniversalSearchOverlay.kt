@@ -6,7 +6,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -181,8 +180,7 @@ fun UniversalSearchOverlay(
                     .clickable(enabled = false) {} // Prevent click-through to scrim
                     .shadow(24.dp, RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp)),
                 shape = RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp),
-                color = if (isDark) AmoledBlack else CrystalWhite,
-                border = BorderStroke(0.6.dp, if (isDark) Color(0xFF1E1E24) else Color(0xFFE4E4E7))
+                color = if (isDark) AmoledBlack else CrystalWhite
             ) {
                 Column(
                     modifier = Modifier
@@ -231,8 +229,7 @@ fun UniversalSearchOverlay(
                             .padding(horizontal = 16.dp, vertical = 8.dp)
                             .height(52.dp),
                         shape = RoundedCornerShape(26.dp),
-                        color = if (isDark) Color(0xFF0C0C0E) else Color(0xFFF4F4F6),
-                        border = BorderStroke(0.6.dp, if (isDark) Color(0xFF1E1E24) else Color(0xFFE4E4E7))
+                        color = if (isDark) Color(0xFF0C0C0E) else Color(0xFFF4F4F6)
                     ) {
                         Row(
                             modifier = Modifier
@@ -463,8 +460,7 @@ fun UniversalSearchOverlay(
                                             }
                                         },
                                     shape = RoundedCornerShape(16.dp),
-                                    color = if (isDark) Color(0xFF0C0C0E) else palette.surface,
-                                    border = BorderStroke(0.6.dp, if (isDark) Color(0xFF1E1E24) else Color(0xFFE4E4E7))
+                                    color = if (isDark) Color(0xFF0C0C0E) else palette.surface
                                 ) {
                                     Column(modifier = Modifier.padding(14.dp)) {
                                         Row(
@@ -500,7 +496,6 @@ fun UniversalSearchOverlay(
                                                 Surface(
                                                     shape = RoundedCornerShape(8.dp),
                                                     color = ElectricCyan.copy(alpha = 0.12f),
-                                                    border = BorderStroke(0.5.dp, ElectricCyan.copy(alpha = 0.25f)),
                                                     modifier = Modifier.padding(start = 8.dp)
                                                 ) {
                                                     Row(

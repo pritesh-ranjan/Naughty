@@ -4,9 +4,7 @@ import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -46,7 +44,6 @@ import com.example.naughty.ui.theme.DarkElevatedSurface
 import com.example.naughty.ui.theme.ElectricAmber
 import com.example.naughty.ui.theme.ElectricCyan
 import com.example.naughty.ui.theme.ElectricGreen
-import com.example.naughty.ui.theme.StealthCardBorder
 import com.example.naughty.ui.theme.isAppInDarkTheme
 import com.example.naughty.util.AudioShareMode
 
@@ -66,7 +63,6 @@ fun ShareAudioOptionSheet(
 
     val surfaceColor = if (isDark) DarkElevatedSurface else MaterialTheme.colorScheme.surface
     val cardColor = if (isDark) Color(0xFF14151B) else Color(0xFFF4F4F6)
-    val borderColor = if (isDark) StealthCardBorder else Color(0xFFE4E4E7)
     val textPrimary = if (isDark) Color.White else Color(0xFF18181B)
     val textSecondary = if (isDark) Color(0xFFA1A1AA) else Color(0xFF71717A)
 
@@ -147,8 +143,7 @@ fun ShareAudioOptionSheet(
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
-                color = cardColor,
-                border = BorderStroke(0.6.dp, borderColor)
+                color = cardColor
             ) {
                 Row(
                     modifier = Modifier
@@ -248,7 +243,6 @@ fun ShareAudioOptionSheet(
                     icon = Icons.Outlined.Mic,
                     accentColor = ElectricGreen,
                     cardColor = cardColor,
-                    borderColor = borderColor,
                     textPrimary = textPrimary,
                     textSecondary = textSecondary,
                     isDark = isDark,
@@ -264,7 +258,6 @@ fun ShareAudioOptionSheet(
                     icon = Icons.Outlined.RecordVoiceOver,
                     accentColor = ElectricCyan,
                     cardColor = cardColor,
-                    borderColor = borderColor,
                     textPrimary = textPrimary,
                     textSecondary = textSecondary,
                     isDark = isDark,
@@ -280,7 +273,6 @@ fun ShareAudioOptionSheet(
                     icon = Icons.Outlined.AutoAwesome,
                     accentColor = ElectricAmber,
                     cardColor = cardColor,
-                    borderColor = borderColor,
                     textPrimary = textPrimary,
                     textSecondary = textSecondary,
                     isDark = isDark,
@@ -298,7 +290,6 @@ private fun AudioOptionActionCard(
     icon: ImageVector,
     accentColor: Color,
     cardColor: Color,
-    borderColor: Color,
     textPrimary: Color,
     textSecondary: Color,
     isDark: Boolean,
@@ -310,8 +301,7 @@ private fun AudioOptionActionCard(
             .clip(RoundedCornerShape(16.dp))
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
-        color = cardColor,
-        border = BorderStroke(0.6.dp, borderColor)
+        color = cardColor
     ) {
         Row(
             modifier = Modifier
@@ -323,12 +313,7 @@ private fun AudioOptionActionCard(
                 modifier = Modifier
                     .size(42.dp)
                     .clip(CircleShape)
-                    .background(accentColor.copy(alpha = if (isDark) 0.16f else 0.12f))
-                    .border(
-                        width = 1.dp,
-                        color = accentColor.copy(alpha = if (isDark) 0.35f else 0.25f),
-                        shape = CircleShape
-                    ),
+                    .background(accentColor.copy(alpha = if (isDark) 0.16f else 0.12f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(

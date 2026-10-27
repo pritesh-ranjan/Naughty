@@ -2,11 +2,13 @@ package com.example.naughty.ui.timeline.components
 
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -415,83 +417,77 @@ fun MilestoneEditSheet(
             )
             Spacer(modifier = Modifier.height(8.dp))
 
-            if (stages.size <= 5) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    stages.forEach { stage ->
-                        val selected = stage.id == stageId
-                        val stageCol = TimelineColors.stageColor(stage.colorKey, stage.category)
-                        Surface(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable { stageId = stage.id },
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (selected) stageCol.copy(alpha = 0.2f) else if (isDark) Color(0xFF141418) else Color(0xFFF4F4F6)
-                        ) {
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(min = 38.dp)
-                                    .padding(horizontal = 2.dp, vertical = 6.dp)
-                            ) {
-                                Text(
-                                    text = stage.label,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (selected) stageCol else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 10.sp,
-                                    lineHeight = 12.sp,
-                                    textAlign = TextAlign.Center,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            }
-                        }
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                stages.forEach { stage ->
+                    val selected = stage.id == stageId
+                    val stageCol = TimelineColors.stageColor(stage.colorKey, stage.category)
+                    val isNeutral = stage.category == StageCategory.NOT_STARTED ||
+                            stage.category == StageCategory.CANCELLED ||
+                            stage.colorKey.lowercase() in listOf("gray", "muted")
+
+                    val activeColor = if (isNeutral) {
+                        if (isDark) CrystalWhite else AmoledBlack
+                    } else {
+                        stageCol
                     }
-                }
-            } else {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    stages.forEach { stage ->
-                        val selected = stage.id == stageId
-                        val stageCol = TimelineColors.stageColor(stage.colorKey, stage.category)
-                        Surface(
-                            modifier = Modifier
-                                .width(74.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable { stageId = stage.id },
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (selected) stageCol.copy(alpha = 0.2f) else if (isDark) Color(0xFF141418) else Color(0xFFF4F4F6)
+
+                    val activeBg = if (isNeutral) {
+                        if (isDark) Color(0xFF27272A) else Color(0xFFE4E4E7)
+                    } else {
+                        stageCol.copy(alpha = if (isDark) 0.22f else 0.16f)
+                    }
+
+                    val containerBg = if (selected) {
+                        activeBg
+                    } else {
+                        if (isDark) Color(0xFF141418) else Color(0xFFF4F4F6)
+                    }
+
+                    val border = if (selected) {
+                        BorderStroke(1.5.dp, activeColor)
+                    } else {
+                        BorderStroke(1.dp, if (isDark) Color(0xFF222228) else Color(0xFFE5E5EA))
+                    }
+
+                    Surface(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable { stageId = stage.id },
+                        shape = RoundedCornerShape(10.dp),
+                        color = containerBg,
+                        border = border
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
                         ) {
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(min = 38.dp)
-                                    .padding(horizontal = 2.dp, vertical = 6.dp)
-                            ) {
-                                Text(
-                                    text = stage.label,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (selected) stageCol else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 10.sp,
-                                    lineHeight = 12.sp,
-                                    textAlign = TextAlign.Center,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.fillMaxWidth()
+                            if (selected) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = "Selected",
+                                    tint = activeColor,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .clip(CircleShape)
+                                        .background(stageCol)
                                 )
                             }
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = stage.label,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (selected) activeColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 12.sp
+                            )
                         }
                     }
                 }
@@ -520,7 +516,10 @@ fun MilestoneEditSheet(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Icon(
                                 imageVector = Icons.Default.EditCalendar,
                                 contentDescription = null,
@@ -528,7 +527,7 @@ fun MilestoneEditSheet(
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(10.dp))
-                            Column {
+                            Column(modifier = Modifier.weight(1f, fill = false)) {
                                 Text(
                                     text = if (dueAt != null) {
                                         SimpleDateFormat("EEE, MMM d, yyyy • h:mm a", Locale.getDefault()).format(Date(dueAt!!))
@@ -537,12 +536,14 @@ fun MilestoneEditSheet(
                                     },
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = if (dueAt != null) FontWeight.SemiBold else FontWeight.Normal,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
 
-                        Row {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             TextButton(onClick = {
                                 val cal = Calendar.getInstance().apply {
                                     if (dueAt != null) timeInMillis = dueAt!!
