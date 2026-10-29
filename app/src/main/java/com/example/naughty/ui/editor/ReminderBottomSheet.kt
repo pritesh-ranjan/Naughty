@@ -18,48 +18,38 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.CalendarMonth
-import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.Notifications
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.delay
+import com.example.naughty.ui.oneui.components.OneUiBottomSheet
+import com.example.naughty.ui.oneui.components.OneUiFilledButton
+import com.example.naughty.ui.oneui.components.OneUiTextField
+import com.example.naughty.ui.oneui.components.OneUiTonalButton
+import com.example.naughty.ui.oneui.theme.OneUi
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -70,12 +60,10 @@ fun ReminderBottomSheet(
     onDeleteReminder: (() -> Unit)? = null,
     onSetReminder: (timeMillis: Long, isCalendarExport: Boolean, reminderText: String) -> Unit
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val context = LocalContext.current
-
     val isEditing = onDeleteReminder != null || (initialTimeMillis != null && initialTimeMillis > 0)
     val now = System.currentTimeMillis()
-    // Default to initialTimeMillis or 1 hour from now
+
     var selectedMillis by remember {
         mutableLongStateOf(
             if (initialTimeMillis != null && initialTimeMillis > 0) {
@@ -106,9 +94,7 @@ fun ReminderBottomSheet(
             selectedCal.get(Calendar.YEAR),
             selectedCal.get(Calendar.MONTH),
             selectedCal.get(Calendar.DAY_OF_MONTH)
-        ).apply {
-            datePicker.minDate = now
-        }
+        )
     }
 
     // Android TimePickerDialog
@@ -130,175 +116,38 @@ fun ReminderBottomSheet(
         )
     }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+    var reminderText by remember(targetContextText) {
+        mutableStateOf(targetContextText.trim())
+    }
+
+    OneUiBottomSheet(
+        title = if (isEditing) "Edit Reminder" else "Set Reminder",
+        subtitle = "System alert & Calendar sync",
+        onDismiss = onDismiss
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .padding(bottom = 32.dp)
+                .padding(bottom = 24.dp)
         ) {
-            // Header Row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primaryContainer),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Notifications,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    Column {
-                        Text(
-                            text = if (isEditing) "Edit Reminder" else "Set Reminder",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = if (isEditing) "Update alert or sync with calendar" else "System alert & Calendar sync",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (onDeleteReminder != null) {
-                        IconButton(
-                            onClick = {
-                                onDeleteReminder()
-                                onDismiss()
-                            },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Delete,
-                                contentDescription = "Delete Reminder",
-                                tint = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(4.dp))
-                    }
-                    IconButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Close,
-                            contentDescription = "Close",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
-            }
-
-            var reminderText by remember(targetContextText) {
-                mutableStateOf(targetContextText.trim())
-            }
-
-            val focusRequester = remember { FocusRequester() }
-
-            LaunchedEffect(targetContextText) {
-                if (targetContextText.isBlank()) {
-                    delay(250)
-                    try {
-                        focusRequester.requestFocus()
-                    } catch (_: Exception) {}
-                }
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // Interactive Text Box for reminder context / selected text / new task
-            Surface(
-                shape = RoundedCornerShape(14.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+            OneUiTextField(
+                value = reminderText,
+                onValueChange = { reminderText = it },
+                label = "Reminder Text",
+                placeholder = "Enter reminder context or task...",
+                singleLine = true,
                 modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 10.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.EditNote,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    BasicTextField(
-                        value = reminderText,
-                        onValueChange = { reminderText = it },
-                        textStyle = TextStyle(
-                            fontFamily = FontFamily.Default,
-                            fontSize = 14.5.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        ),
-                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                        modifier = Modifier
-                            .weight(1f)
-                            .focusRequester(focusRequester),
-                        decorationBox = { innerTextField ->
-                            if (reminderText.isEmpty()) {
-                                Text(
-                                    text = "Enter reminder text or task...",
-                                    fontSize = 14.5.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                                )
-                            }
-                            innerTextField()
-                        }
-                    )
-                    if (reminderText.isNotEmpty()) {
-                        Spacer(modifier = Modifier.width(6.dp))
-                        IconButton(
-                            onClick = { reminderText = "" },
-                            modifier = Modifier.size(22.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Close,
-                                contentDescription = "Clear reminder text",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
-                }
-            }
+            )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(18.dp))
 
             // Quick Preset Suggestions
             Text(
-                text = "QUICK SUGGESTIONS",
-                fontSize = 11.sp,
+                text = "QUICK PRESETS",
+                style = OneUi.typography.caption,
                 fontWeight = FontWeight.Bold,
-                letterSpacing = 0.8.sp,
-                color = MaterialTheme.colorScheme.primary
+                letterSpacing = 1.2.sp,
+                color = OneUi.colors.textSecondary
             )
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -307,7 +156,6 @@ fun ReminderBottomSheet(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Preset 1: In 1 hour
                 PresetChip(
                     label = "⚡ In 1 Hour",
                     onClick = {
@@ -315,7 +163,6 @@ fun ReminderBottomSheet(
                     }
                 )
 
-                // Preset 2: Tomorrow morning (9:00 AM)
                 PresetChip(
                     label = "🌅 Tomorrow 9 AM",
                     onClick = {
@@ -329,26 +176,28 @@ fun ReminderBottomSheet(
                     }
                 )
 
-                // Preset 3: Tomorrow evening (6:00 PM)
                 PresetChip(
-                    label = "🌆 Tomorrow 6 PM",
+                    label = "🌙 Tonight 8 PM",
                     onClick = {
                         val cal = Calendar.getInstance().apply {
-                            add(Calendar.DAY_OF_YEAR, 1)
-                            set(Calendar.HOUR_OF_DAY, 18)
+                            set(Calendar.HOUR_OF_DAY, 20)
                             set(Calendar.MINUTE, 0)
                             set(Calendar.SECOND, 0)
+                            if (timeInMillis <= System.currentTimeMillis()) {
+                                add(Calendar.DAY_OF_YEAR, 1)
+                            }
                         }
                         selectedMillis = cal.timeInMillis
                     }
                 )
 
-                // Preset 4: In 2 days
                 PresetChip(
-                    label = "🗓️ In 2 Days",
+                    label = "📅 This Weekend",
                     onClick = {
                         val cal = Calendar.getInstance().apply {
-                            add(Calendar.DAY_OF_YEAR, 2)
+                            val dayOfWeek = get(Calendar.DAY_OF_WEEK)
+                            val daysUntilSat = (Calendar.SATURDAY - dayOfWeek + 7) % 7
+                            add(Calendar.DAY_OF_YEAR, if (daysUntilSat == 0) 7 else daysUntilSat)
                             set(Calendar.HOUR_OF_DAY, 10)
                             set(Calendar.MINUTE, 0)
                             set(Calendar.SECOND, 0)
@@ -358,15 +207,15 @@ fun ReminderBottomSheet(
                 )
             }
 
-            Spacer(modifier = Modifier.height(18.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-            // Custom Date & Time Picker Triggers
+            // Pickers Row (Date Card & Time Card)
             Text(
                 text = "DATE & TIME",
-                fontSize = 11.sp,
+                style = OneUi.typography.caption,
                 fontWeight = FontWeight.Bold,
-                letterSpacing = 0.8.sp,
-                color = MaterialTheme.colorScheme.primary
+                letterSpacing = 1.2.sp,
+                color = OneUi.colors.textSecondary
             )
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -374,162 +223,140 @@ fun ReminderBottomSheet(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // Date Picker Button
-                val dateDisplay = remember(selectedMillis) {
-                    SimpleDateFormat("EEE, MMM d, yyyy", Locale.getDefault()).format(Date(selectedMillis))
-                }
+                // Date picker trigger card
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                    shape = OneUi.shapes.inner,
+                    color = OneUi.colors.surfaceElevated,
                     modifier = Modifier
                         .weight(1.3f)
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(OneUi.shapes.inner)
                         .clickable { datePickerDialog.show() }
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Outlined.CalendarMonth,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = dateDisplay,
-                            fontSize = 13.5.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(OneUi.colors.accent.copy(alpha = 0.16f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.CalendarMonth,
+                                contentDescription = null,
+                                tint = OneUi.colors.accent,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = "Date",
+                                style = OneUi.typography.caption,
+                                color = OneUi.colors.textSecondary
+                            )
+                            val dateString = remember(selectedMillis) {
+                                SimpleDateFormat("EEE, MMM d, yyyy", Locale.getDefault()).format(Date(selectedMillis))
+                            }
+                            Text(
+                                text = dateString,
+                                style = OneUi.typography.body,
+                                fontWeight = FontWeight.Bold,
+                                color = OneUi.colors.textPrimary
+                            )
+                        }
                     }
                 }
 
-                // Time Picker Button
-                val timeDisplay = remember(selectedMillis) {
-                    SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(selectedMillis))
-                }
+                // Time picker trigger card
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                    shape = OneUi.shapes.inner,
+                    color = OneUi.colors.surfaceElevated,
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(OneUi.shapes.inner)
                         .clickable { timePickerDialog.show() }
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Outlined.AccessTime,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = timeDisplay,
-                            fontSize = 13.5.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(OneUi.badgePalette.purple.copy(alpha = 0.16f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.AccessTime,
+                                contentDescription = null,
+                                tint = OneUi.badgePalette.purple,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = "Time",
+                                style = OneUi.typography.caption,
+                                color = OneUi.colors.textSecondary
+                            )
+                            val timeString = remember(selectedMillis) {
+                                SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(selectedMillis))
+                            }
+                            Text(
+                                text = timeString,
+                                style = OneUi.typography.body,
+                                fontWeight = FontWeight.Bold,
+                                color = OneUi.colors.textPrimary
+                            )
+                        }
                     }
                 }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Action Buttons: System Notification vs. Calendar
+            // Action Buttons
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // Secondary: Add to Calendar
-                Button(
+                OneUiTonalButton(
+                    text = "Calendar",
+                    icon = Icons.Outlined.CalendarMonth,
                     onClick = {
                         onSetReminder(selectedMillis, true, reminderText.trim())
                         onDismiss()
                     },
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
-                        contentColor = MaterialTheme.colorScheme.primary
-                    ),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(48.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.CalendarMonth,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "Add to Calendar",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
+                    modifier = Modifier.weight(1f)
+                )
 
-                // Primary: Set System Reminder
-                Button(
+                OneUiFilledButton(
+                    text = if (isEditing) "Update Alert" else "Set Alert",
+                    icon = Icons.Outlined.Notifications,
                     onClick = {
                         onSetReminder(selectedMillis, false, reminderText.trim())
                         onDismiss()
                     },
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
-                    ),
-                    modifier = Modifier
-                        .weight(1.2f)
-                        .height(48.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Notifications,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = if (isEditing) "Update Alert" else "Set System Alert",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+                    modifier = Modifier.weight(1.3f)
+                )
             }
 
             if (onDeleteReminder != null) {
                 Spacer(modifier = Modifier.height(10.dp))
-                Button(
+                OneUiTonalButton(
+                    text = "Remove Reminder",
+                    icon = Icons.Outlined.Delete,
                     onClick = {
                         onDeleteReminder()
                         onDismiss()
                     },
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.14f),
-                        contentColor = MaterialTheme.colorScheme.error
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(44.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Delete,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "Remove Reminder",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
     }
@@ -540,19 +367,18 @@ private fun PresetChip(
     label: String,
     onClick: () -> Unit
 ) {
-    Surface(
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+    Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(16.dp))
+            .clip(OneUi.shapes.pill)
+            .background(OneUi.colors.surfaceElevated)
             .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 8.dp)
     ) {
         Text(
             text = label,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp)
+            style = OneUi.typography.caption,
+            fontWeight = FontWeight.SemiBold,
+            color = OneUi.colors.textPrimary
         )
     }
 }

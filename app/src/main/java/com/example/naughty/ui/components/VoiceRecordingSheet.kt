@@ -80,6 +80,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import com.example.naughty.ui.oneui.theme.OneUi
+import com.example.naughty.ui.oneui.components.OneUiBottomSheet
+import com.example.naughty.ui.oneui.components.OneUiConfirmDialog
+import com.example.naughty.ui.oneui.components.OneUiSegmentedControl
 import com.example.naughty.ui.theme.AmoledBlack
 import com.example.naughty.ui.theme.CrystalWhite
 import com.example.naughty.ui.theme.ElectricGreen
@@ -165,90 +169,31 @@ fun VoiceRecordingSheet(
         }
     }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = if (isDark) AmoledBlack else CrystalWhite,
-        dragHandle = null
+    OneUiBottomSheet(
+        title = "Voice Actions",
+        subtitle = "Voice notes & offline dictation",
+        onDismiss = onDismiss
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 28.dp)
         ) {
-            // Header with Close & Tabs
-            Row(
+            OneUiSegmentedControl(
+                items = listOf("🎙️ Voice Note", "✨ Voice to Text"),
+                selectedIndex = selectedTabIndex,
+                onSelect = {
+                    if (!isRecording) {
+                        selectedTabIndex = it
+                        if (it == 0) transcriptionHelper.stopListening()
+                    }
+                },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 14.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Voice Actions",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isDark) CrystalWhite else AmoledBlack
-                )
+                    .padding(horizontal = 16.dp)
+            )
 
-                IconButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Close,
-                        contentDescription = "Close",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            // Mode Tabs
-            TabRow(
-                selectedTabIndex = selectedTabIndex,
-                containerColor = Color.Transparent,
-                contentColor = accentColor,
-                indicator = { tabPositions ->
-                    TabRowDefaults.SecondaryIndicator(
-                        modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTabIndex]),
-                        color = accentColor
-                    )
-                },
-                modifier = Modifier.padding(horizontal = 16.dp)
-            ) {
-                Tab(
-                    selected = selectedTabIndex == 0,
-                    onClick = {
-                        if (!isRecording) {
-                            selectedTabIndex = 0
-                            transcriptionHelper.stopListening()
-                        }
-                    },
-                    text = {
-                        Text(
-                            text = "🎙️ Voice Note",
-                            fontWeight = if (selectedTabIndex == 0) FontWeight.Bold else FontWeight.Medium
-                        )
-                    }
-                )
-
-                Tab(
-                    selected = selectedTabIndex == 1,
-                    onClick = {
-                        if (!isRecording) {
-                            selectedTabIndex = 1
-                        }
-                    },
-                    text = {
-                        Text(
-                            text = "✨ Voice to Text",
-                            fontWeight = if (selectedTabIndex == 1) FontWeight.Bold else FontWeight.Medium
-                        )
-                    }
-                )
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(18.dp))
 
             if (!hasAudioPermission) {
                 // Permission Request Card
@@ -739,36 +684,16 @@ private fun VoiceNoteRecordingSection(
     }
 
     if (showDiscardConfirmDialog) {
-        AlertDialog(
-            onDismissRequest = { showDiscardConfirmDialog = false },
-            title = {
-                Text(
-                    text = "Discard Recording?",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
+        OneUiConfirmDialog(
+            title = "Discard Recording?",
+            message = "Are you sure you want to discard this voice recording?",
+            confirmLabel = "Discard",
+            destructive = true,
+            onConfirm = {
+                showDiscardConfirmDialog = false
+                onDiscard()
             },
-            text = {
-                Text("Are you sure you want to discard this voice recording?")
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showDiscardConfirmDialog = false
-                        onDiscard()
-                    },
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    )
-                ) {
-                    Text("Discard")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDiscardConfirmDialog = false }) {
-                    Text("Cancel")
-                }
-            }
+            onDismiss = { showDiscardConfirmDialog = false }
         )
     }
 }

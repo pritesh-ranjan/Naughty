@@ -141,14 +141,11 @@ fun NaughtyTheme(
         ThemeMode.AUTO -> systemDark
     }
 
-    val colorScheme = if (isDark) DarkColorScheme else LightColorScheme
-
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = NaughtyTypography,
+    com.example.naughty.ui.oneui.theme.OneUiTheme(
+        isDark = isDark,
         content = content
     )
 }
 
 @Composable
-fun isAppInDarkTheme(): Boolean = MaterialTheme.colorScheme.background == AmoledBlack
+fun isAppInDarkTheme(): Boolean = com.example.naughty.ui.oneui.theme.LocalOneUiColors.current.isDark

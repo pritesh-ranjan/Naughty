@@ -74,6 +74,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.naughty.ui.oneui.theme.OneUi
+import com.example.naughty.ui.oneui.components.OneUiConfirmDialog
 import com.example.naughty.ui.theme.AmoledBlack
 import com.example.naughty.ui.theme.CrystalWhite
 import com.example.naughty.ui.theme.ElectricGreen
@@ -219,15 +221,15 @@ fun VoiceNotePlayer(
         (currentPositionMillis.toFloat() / durationMillis.toFloat()).coerceIn(0f, 1f)
     } else 0f
 
-    val cardBg = if (isDark) Color(0xFF141418) else Color(0xFFF4F4F6)
-    val playedColor = accentColor
-    val unplayedColor = if (isDark) Color(0xFF3F3F46) else Color(0xFFD4D4D8)
+    val cardBg = OneUi.colors.surfaceElevated
+    val playedColor = if (accentColor != ElectricGreen) accentColor else OneUi.colors.accent
+    val unplayedColor = OneUi.colors.divider
 
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp)),
-        shape = RoundedCornerShape(18.dp),
+            .clip(OneUi.shapes.inner),
+        shape = OneUi.shapes.inner,
         color = cardBg
     ) {
         Column(
@@ -554,44 +556,24 @@ fun VoiceNotePlayer(
     }
 
     if (showDeleteConfirmDialog) {
-        AlertDialog(
-            onDismissRequest = { showDeleteConfirmDialog = false },
-            title = {
-                Text(
-                    text = "Delete Voice Note?",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
+        OneUiConfirmDialog(
+            title = "Delete Voice Note?",
+            message = "Are you sure you want to delete this voice note? This action cannot be undone.",
+            confirmLabel = "Delete",
+            destructive = true,
+            onConfirm = {
+                showDeleteConfirmDialog = false
+                try {
+                    mediaPlayer?.run {
+                        if (isPlaying) stop()
+                        release()
+                    }
+                } catch (_: Exception) {}
+                mediaPlayer = null
+                isPlaying = false
+                onDelete()
             },
-            text = {
-                Text("Are you sure you want to delete this voice note? This action cannot be undone.")
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showDeleteConfirmDialog = false
-                        try {
-                            mediaPlayer?.run {
-                                if (isPlaying) stop()
-                                release()
-                            }
-                        } catch (_: Exception) {}
-                        mediaPlayer = null
-                        isPlaying = false
-                        onDelete()
-                    },
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    )
-                ) {
-                    Text("Delete")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteConfirmDialog = false }) {
-                    Text("Cancel")
-                }
-            }
+            onDismiss = { showDeleteConfirmDialog = false }
         )
     }
 }

@@ -305,6 +305,27 @@ Interactive onboarding and feature highlight bottom sheet (`FeatureShowcaseSheet
 * **On-Demand Accessibility**:
   * Re-accessible anytime in Settings under "Feature Showcase & Key Highlights" for exploration.
 
+### 4.10 Samsung One UI 9 Handcrafted Design System & UI Revamp
+The entire user interface conforms strictly to **Samsung One UI 9** design philosophy, emphasizing one-handed reachability, visual hierarchy, squircle island cards, and OLED-pure contrast:
+* **One UI Foundations (`ui/oneui/theme/`)**:
+  * `OneUiColors`: AMOLED pure pitch black (`0xFF000000`) in dark mode, elevated dark cards (`0xFF1C1C1E`), elevated sheets/dialogs (`0xFF252528`), inset hairline dividers (`0xFF2C2C30`), vivid Samsung blue accent (`0xFF3E91FF`), and full One UI badge color palette (`blue`, `purple`, `orange`, `green`, `teal`, `red`, `gray`).
+  * `OneUiShapes`: 24dp squircle island cards (`card`), 16dp nested inner elements (`inner`), pill buttons and capsule dock (`pill`), 28dp top-rounded bottom sheets (`sheet`), 26dp dialog squircle (`dialog`), and 18dp popup menus (`menu`).
+  * `OneUiTypography`: Large reachability title (`32sp`, semi-bold), collapsible bar title (`19sp`), section title (`20sp`), group labels (`13sp`), body text, subhead, and caption badge.
+* **Reusable One UI Component Kit (`ui/oneui/components/`)**:
+  * `OneUiScaffold`: Collapsible header architecture featuring large reachability titles that transition into compact top bars on scroll.
+  * `OneUiCard` & `OneUiCardGroup`: Elevated squircle island groups with inset hairline dividers (respecting leading icon indent) and rounded top/bottom bounds.
+  * `OneUiBottomDock`: Floating capsule dock `[ 🔍 Search notes  │  ＋ ]` anchored above navigation bar.
+  * `OneUiBottomSheet` & `OneUiDialog` (`OneUiConfirmDialog`): Consistent modal dialogs and bottom sheets with smooth enter/exit animations and One UI button tokens.
+  * `OneUiSwitch`: Custom Samsung-spec pill switch with sliding circular thumb.
+  * `OneUiProgress` (`OneUiDonut`, `OneUiProgressBar`): Multi-segment analytics donut charts and rounded progress indicators.
+  * `OneUiChip`, `OneUiSegmentedControl`, `OneUiTextField`, `OneUiEmptyState`, `OneUiIconBadge`, `OneUiFilledButton`, `OneUiTonalButton`.
+* **Preservation of Note Canvas & Handcrafted Themes**:
+  * **Strict Canvas Invariant**: Note background (`canvasBackground`), paper patterns (`PaperBackground`), custom font families, and text colors are 100% driven by `NoteTheme`.
+  * All surrounding chrome, editor toolbars, attachment chips (`VoiceNotePlayer`, `AttachedImageThumbnail`), sheets, and menus adopt One UI 9.
+* **Single-Column Home Screen & Read-Only Cards**:
+  * Home notes screen uses a clean single-column layout grouped chronologically via `NoteSections.kt` (`Pinned`, `Today`, `Yesterday`, `This week`, `Month Year`).
+  * Cards are strictly read-only on the home feed (tap to open editor; long-press opens One UI action bottom sheet with Pin, Lock, Binding, Reminder, and Delete options).
+
 ---
 
 ## 5. Directory Structure Reference
@@ -318,7 +339,9 @@ app/src/main/java/com/example/naughty/
 ├── ShareCopyTextActivity.kt       # Floating context menu "Add to Naughty"
 ├── binding/                       # App binding detection engine
 │   ├── BindingDetector.kt         # UsageStats polling loop in application scope
-│   └── BindingEvent.kt            # Foreground change event definitions
+│   ├── BindingEvent.kt            # Foreground change event definitions
+│   ├── CircleToSearchDetector.kt  # Google App / Lens surface detector
+│   └── DetectorForegroundService.kt # Silent foreground service preventing app freeze
 ├── data/
 │   ├── file/
 │   │   └── MarkdownFileManager.kt # Disk markdown read/write operations
@@ -332,6 +355,9 @@ app/src/main/java/com/example/naughty/
 │   │   └── timeline/              # Room entities & DAO for Timeline
 │   │       ├── TimelineDao.kt
 │   │       └── TimelineEntities.kt
+│   ├── mention/                   # Note and contact mention search
+│   │   ├── MentionItem.kt
+│   │   └── MentionRepository.kt
 │   └── repository/
 │       ├── BindingRepository.kt
 │       ├── NoteRepository.kt      # Coordinates DB metadata & .md files
@@ -343,29 +369,56 @@ app/src/main/java/com/example/naughty/
 ├── ui/
 │   ├── binding/                   # App binding sheet UI & ViewModel
 │   ├── components/                # Reusable Compose components
+│   │   ├── ClipSaveSheet.kt       # Quick CTS clip save bottom sheet
+│   │   ├── FeatureShowcaseSheet.kt# Onboarding & update feature highlight sheet
 │   │   ├── FullscreenImageViewer.kt
 │   │   ├── PaperBackground.kt     # Grid, dot, and ruled canvas paper renderer
 │   │   ├── PermissionGate.kt      # Usage stats permission request UI
 │   │   ├── ShareAudioOptionSheet.kt # Audio share modal sheet (Attach, Transcribe, Both)
 │   │   ├── ShareImageOptionSheet.kt # Image share modal sheet (Image, OCR, Both)
-│   │   ├── UniversalSearchOverlay.kt # Quick search with biometric gating
+│   │   ├── UniversalSearchOverlay.kt # One UI 9 full-screen search
 │   │   ├── VoiceNotePlayer.kt     # WhatsApp-style scrubber, speed toggle & transcript
 │   │   └── VoiceRecordingSheet.kt # Live AudioRecord + Audx toggle recording bottom sheet
 │   ├── editor/                    # Note editing suite
 │   │   ├── BulletTextHelper.kt    # Automatic bullet and checkbox list indentation
 │   │   ├── EditorBlock.kt         # Block parser & markdown serializer
 │   │   ├── InlineReminderParser.kt# [🔔 ...](reminder:...) regex parser
+│   │   ├── MentionSuggestionSheet.kt # In-editor @ mention sheet
 │   │   ├── NoteEditorScreen.kt    # Main editor Compose layout
 │   │   ├── NoteEditorViewModel.kt # State management, undo/redo, auto-save
 │   │   ├── ReminderBottomSheet.kt
 │   │   └── ThemeSelectionSheet.kt # Palette & paper theme picker
 │   ├── navigation/
 │   │   └── NavGraph.kt            # Navigation 3 route definitions
-│   ├── notelist/                  # Main notes grid / list
-│   │   ├── HomeFeatureTiles.kt    # Pinned quick access banner for Timeline tasks
-│   │   ├── NoteCard.kt            # Themed note preview card with thumbnail & voice mic icon
-│   │   ├── NoteListScreen.kt      # Floating dock, filter tabs, search trigger
-│   │   └── NoteListViewModel.kt
+│   ├── notelist/                  # Main notes list
+│   │   ├── NoteListScreen.kt      # One UI 9 collapsing header, filter tabs, bottom dock
+│   │   ├── NoteListViewModel.kt
+│   │   ├── NotePreviewCard.kt     # Read-only One UI squircle card with badge & attachments
+│   │   └── NoteSections.kt        # Chronological date grouping engine
+│   ├── oneui/                     # Samsung One UI 9 Handcrafted Suite
+│   │   ├── components/            # Shared reusable One UI components
+│   │   │   ├── OneUiBottomSheet.kt
+│   │   │   ├── OneUiBottomDock.kt
+│   │   │   ├── OneUiButton.kt
+│   │   │   ├── OneUiCard.kt
+│   │   │   ├── OneUiCardGroup.kt
+│   │   │   ├── OneUiChip.kt
+│   │   │   ├── OneUiDialog.kt
+│   │   │   ├── OneUiEmptyState.kt
+│   │   │   ├── OneUiIconBadge.kt
+│   │   │   ├── OneUiProgress.kt
+│   │   │   ├── OneUiScaffold.kt
+│   │   │   ├── OneUiScrollToTop.kt
+│   │   │   ├── OneUiSearchField.kt
+│   │   │   ├── OneUiSectionHeader.kt
+│   │   │   ├── OneUiSegmentedControl.kt
+│   │   │   ├── OneUiSwitch.kt
+│   │   │   └── OneUiTextField.kt
+│   │   └── theme/                 # Design tokens & theme provider
+│   │       ├── OneUiColors.kt
+│   │       ├── OneUiShapes.kt
+│   │       ├── OneUiTheme.kt
+│   │       └── OneUiTypography.kt
 │   ├── settings/                  # Full-screen Settings & configuration
 │   │   ├── SettingsComponents.kt  # Theme preview cards & about dialog
 │   │   ├── SettingsScreen.kt      # General, appearance, and maintenance settings

@@ -1,37 +1,27 @@
 package com.example.naughty.ui.settings
 
-import android.Manifest
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Code
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Security
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -40,15 +30,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -60,58 +46,15 @@ import com.example.naughty.ui.components.hasNotificationPermission
 import com.example.naughty.ui.components.hasUsageStatsPermission
 import com.example.naughty.ui.components.isBatteryOptimizationIgnored
 import com.example.naughty.ui.components.requestIgnoreBatteryOptimization
-import com.example.naughty.ui.theme.AmoledBlack
-import com.example.naughty.ui.theme.ElectricAmber
-import com.example.naughty.ui.theme.ElectricGreen
-import com.example.naughty.ui.theme.ElectricPink
-import com.example.naughty.ui.theme.isAppInDarkTheme
+import com.example.naughty.ui.oneui.components.OneUiBottomSheet
+import com.example.naughty.ui.oneui.components.OneUiCardGroup
+import com.example.naughty.ui.oneui.components.OneUiFilledButton
+import com.example.naughty.ui.oneui.components.OneUiLeading
+import com.example.naughty.ui.oneui.components.OneUiListItem
+import com.example.naughty.ui.oneui.components.OneUiTrailing
+import com.example.naughty.ui.oneui.theme.OneUi
 
-@Composable
-fun ThemeOptionRow(
-    title: String,
-    icon: ImageVector,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    val isDark = isAppInDarkTheme()
-    val activeBg = if (isDark) ElectricGreen.copy(alpha = 0.14f) else AmoledBlack.copy(alpha = 0.08f)
-    val activeTint = if (isDark) ElectricGreen else AmoledBlack
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (selected) activeBg else Color.Transparent)
-            .clickable(onClick = onClick)
-            .padding(vertical = 10.dp, horizontal = 12.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = if (selected) activeTint else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(14.dp))
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                color = if (selected) activeTint else MaterialTheme.colorScheme.onSurface
-            )
-        }
-        if (selected) {
-            Icon(
-                imageVector = Icons.Outlined.Check,
-                contentDescription = "Selected",
-                tint = activeTint,
-                modifier = Modifier.size(18.dp)
-            )
-        }
-    }
-}
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AboutAndPrivacyDialog(
     versionName: String,
@@ -120,7 +63,6 @@ fun AboutAndPrivacyDialog(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val isDark = isAppInDarkTheme()
 
     var hasUsageStats by remember { mutableStateOf(hasUsageStatsPermission(context)) }
     var hasNotifications by remember { mutableStateOf(hasNotificationPermission(context)) }
@@ -148,313 +90,145 @@ fun AboutAndPrivacyDialog(
         }
     }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = if (isDark) ElectricGreen.copy(alpha = 0.15f) else AmoledBlack.copy(alpha = 0.08f),
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text(
-                            text = "N",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp,
-                            color = if (isDark) ElectricGreen else AmoledBlack
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Column {
-                    Text(
-                        text = "About Naughty",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "v$versionName (Build $versionCode) • 100% Offline",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 11.sp
-                    )
-                }
-            }
-        },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                // Technical Architecture Specs
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = if (isDark) Color(0xFF0C0C0E) else Color(0xFFF4F4F6),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Outlined.Security,
-                                contentDescription = null,
-                                tint = if (isDark) ElectricGreen else MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "TECHNICAL SPECS",
-                                style = MaterialTheme.typography.labelSmall,
-                                letterSpacing = 1.1.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 10.sp,
-                                color = if (isDark) ElectricGreen else MaterialTheme.colorScheme.primary
-                            )
-                        }
-
-                        TechSpecRow("Engine", "100% Offline • Zero Network")
-                        TechSpecRow("Storage", "Room SQLite • Markdown (.md)")
-                        TechSpecRow("Audio", "Audx RNNoise • Opus 48 kHz")
-                        TechSpecRow("Vision/Speech", "ML Kit OCR • SpeechRecognizer")
-                        TechSpecRow("Security", "BiometricStrong (Hardware)")
-                    }
-                }
-
-                // System Permissions Status Chips
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = if (isDark) Color(0xFF0C0C0E) else Color(0xFFF4F4F6),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = "SYSTEM PERMISSIONS",
-                            style = MaterialTheme.typography.labelSmall,
-                            letterSpacing = 1.1.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 10.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            PermissionChip(
-                                modifier = Modifier.weight(1f),
-                                label = "Usage",
-                                granted = hasUsageStats,
-                                onClick = {
-                                    try {
-                                        val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
-                                            data = Uri.parse("package:${context.packageName}")
-                                        }
-                                        context.startActivity(intent)
-                                    } catch (_: Exception) {
-                                        context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
-                                    }
-                                }
-                            )
-                            PermissionChip(
-                                modifier = Modifier.weight(1f),
-                                label = "Alerts",
-                                granted = hasNotifications,
-                                onClick = {
-                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                        context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                                            putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                                        })
-                                    } else {
-                                        context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                            data = Uri.fromParts("package", context.packageName, null)
-                                        })
-                                    }
-                                }
-                            )
-                            PermissionChip(
-                                modifier = Modifier.weight(1f),
-                                label = "Battery",
-                                granted = hasBatteryExemption,
-                                onClick = {
-                                    requestIgnoreBatteryOptimization(context)
-                                }
-                            )
-                        }
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            PermissionChip(
-                                modifier = Modifier.weight(1f),
-                                label = "Alarms",
-                                granted = canScheduleExactAlarm,
-                                onClick = {
-                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                                        context.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
-                                            data = Uri.fromParts("package", context.packageName, null)
-                                        })
-                                    }
-                                }
-                            )
-                            PermissionChip(
-                                modifier = Modifier.weight(1f),
-                                label = "Mic",
-                                granted = hasMicrophone,
-                                onClick = {
-                                    context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                        data = Uri.fromParts("package", context.packageName, null)
-                                    })
-                                }
-                            )
-                        }
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            PermissionChip(
-                                modifier = Modifier.weight(1f),
-                                label = "Contacts",
-                                granted = hasContacts,
-                                onClick = {
-                                    context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                        data = Uri.fromParts("package", context.packageName, null)
-                                    })
-                                }
-                            )
-                            PermissionChip(
-                                modifier = Modifier.weight(1f),
-                                label = "Calendar",
-                                granted = hasCalendar,
-                                onClick = {
-                                    context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                        data = Uri.fromParts("package", context.packageName, null)
-                                    })
-                                }
-                            )
-                        }
-                    }
-                }
-
-                // Credits & License
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = if (isDark) Color(0xFF0C0C0E) else Color(0xFFF4F4F6),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Outlined.Code,
-                                contentDescription = null,
-                                tint = ElectricAmber,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "CREDITS & LICENSE",
-                                style = MaterialTheme.typography.labelSmall,
-                                letterSpacing = 1.1.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 10.sp,
-                                color = ElectricAmber
-                            )
-                        }
-                        Text(
-                            text = "MIT License • Audx (RNNoise) • Google ML Kit",
-                            style = MaterialTheme.typography.bodySmall,
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Close")
-            }
-        }
-    )
-}
-
-@Composable
-private fun PermissionChip(
-    modifier: Modifier = Modifier,
-    label: String,
-    granted: Boolean,
-    onClick: () -> Unit
-) {
-    val isDark = isAppInDarkTheme()
-    Surface(
-        modifier = modifier
-            .clip(RoundedCornerShape(8.dp))
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(8.dp),
-        color = if (isDark) Color(0xFF16161A) else Color(0xFFECECEF)
+    OneUiBottomSheet(
+        title = "About Naughty",
+        subtitle = "v$versionName (Build $versionCode) • 100% Offline & Private",
+        onDismissRequest = onDismiss
     ) {
-        Row(
-            modifier = Modifier.padding(vertical = 7.dp, horizontal = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .size(6.dp)
-                    .clip(CircleShape)
-                    .background(if (granted) ElectricGreen else ElectricPink)
-            )
-            Spacer(modifier = Modifier.width(5.dp))
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                fontSize = 10.5.sp,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1
+            // Technical Specs Island
+            OneUiCardGroup(label = "Technical Architecture") {
+                item {
+                    OneUiListItem(
+                        title = "Offline Engine",
+                        subtitle = "100% On-Device • Zero Network Access",
+                        leading = OneUiLeading.IconBadge(Icons.Outlined.Security, OneUi.colors.badge.green)
+                    )
+                }
+                item {
+                    OneUiListItem(
+                        title = "Storage",
+                        subtitle = "Room SQLite Metadata • Physical Markdown (.md)",
+                        leading = OneUiLeading.IconBadge(Icons.Outlined.Info, OneUi.colors.badge.teal)
+                    )
+                }
+                item {
+                    OneUiListItem(
+                        title = "Audio Architecture",
+                        subtitle = "Audx RNNoise Neural Suppression • 48 kHz Opus",
+                        leading = OneUiLeading.IconBadge(Icons.Outlined.Info, OneUi.colors.badge.purple)
+                    )
+                }
+                item {
+                    OneUiListItem(
+                        title = "On-Device AI",
+                        subtitle = "Google ML Kit OCR • Android SpeechRecognizer",
+                        leading = OneUiLeading.IconBadge(Icons.Outlined.Info, OneUi.colors.badge.blue)
+                    )
+                }
+            }
+
+            // System Permissions Island
+            OneUiCardGroup(label = "System Permissions") {
+                item {
+                    OneUiListItem(
+                        title = "Usage Access",
+                        subtitle = if (hasUsageStats) "Granted • App binding detection" else "Denied • Required for app-linked notes",
+                        subtitleColor = if (hasUsageStats) OneUi.colors.textSecondary else OneUi.colors.warning,
+                        trailing = OneUiTrailing.CountBadge(if (hasUsageStats) "Granted" else "Grant", isHighlight = !hasUsageStats),
+                        onClick = {
+                            try {
+                                val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
+                                    data = Uri.parse("package:${context.packageName}")
+                                }
+                                context.startActivity(intent)
+                            } catch (_: Exception) {
+                                context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+                            }
+                        }
+                    )
+                }
+                item {
+                    OneUiListItem(
+                        title = "Notifications",
+                        subtitle = if (hasNotifications) "Granted • Surfacing contextual notes" else "Denied • Cannot post note notifications",
+                        subtitleColor = if (hasNotifications) OneUi.colors.textSecondary else OneUi.colors.warning,
+                        trailing = OneUiTrailing.CountBadge(if (hasNotifications) "Granted" else "Grant", isHighlight = !hasNotifications),
+                        onClick = {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                    putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                })
+                            } else {
+                                context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                    data = Uri.fromParts("package", context.packageName, null)
+                                })
+                            }
+                        }
+                    )
+                }
+                item {
+                    OneUiListItem(
+                        title = "Battery Exemption",
+                        subtitle = if (hasBatteryExemption) "Active • Unrestricted background detection" else "Optimized • OS may freeze detection",
+                        subtitleColor = if (hasBatteryExemption) OneUi.colors.textSecondary else OneUi.colors.warning,
+                        trailing = OneUiTrailing.CountBadge(if (hasBatteryExemption) "Active" else "Fix", isHighlight = !hasBatteryExemption),
+                        onClick = { requestIgnoreBatteryOptimization(context) }
+                    )
+                }
+                item {
+                    OneUiListItem(
+                        title = "Exact Alarms",
+                        subtitle = if (canScheduleExactAlarm) "Granted • Scheduled reminders" else "Denied • Exact timing limited",
+                        subtitleColor = if (canScheduleExactAlarm) OneUi.colors.textSecondary else OneUi.colors.warning,
+                        trailing = OneUiTrailing.CountBadge(if (canScheduleExactAlarm) "Granted" else "Grant", isHighlight = !canScheduleExactAlarm),
+                        onClick = {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                context.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                                    data = Uri.fromParts("package", context.packageName, null)
+                                })
+                            }
+                        }
+                    )
+                }
+                item {
+                    OneUiListItem(
+                        title = "Microphone",
+                        subtitle = if (hasMicrophone) "Granted • Voice notes recording" else "Denied • Voice memos unavailable",
+                        subtitleColor = if (hasMicrophone) OneUi.colors.textSecondary else OneUi.colors.warning,
+                        trailing = OneUiTrailing.CountBadge(if (hasMicrophone) "Granted" else "Grant", isHighlight = !hasMicrophone),
+                        onClick = {
+                            context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                data = Uri.fromParts("package", context.packageName, null)
+                            })
+                        }
+                    )
+                }
+            }
+
+            // License Island
+            OneUiCardGroup(label = "Credits & License") {
+                item {
+                    OneUiListItem(
+                        title = "MIT License",
+                        subtitle = "Audx (RNNoise) • Google ML Kit • 100% Open Source",
+                        leading = OneUiLeading.IconBadge(Icons.Outlined.Code, OneUi.colors.badge.orange)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            OneUiFilledButton(
+                text = "Close",
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth()
             )
         }
-    }
-}
-
-@Composable
-private fun TechSpecRow(label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            fontSize = 10.5.sp,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(88.dp)
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodySmall,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 10.5.sp,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.weight(1f)
-        )
     }
 }

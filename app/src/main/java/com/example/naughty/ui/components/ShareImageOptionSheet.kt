@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.DocumentScanner
@@ -27,11 +26,8 @@ import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,11 +39,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.naughty.ui.notelist.AttachedImageThumbnail
-import com.example.naughty.ui.theme.DarkElevatedSurface
-import com.example.naughty.ui.theme.ElectricAmber
-import com.example.naughty.ui.theme.ElectricCyan
-import com.example.naughty.ui.theme.ElectricGreen
-import com.example.naughty.ui.theme.isAppInDarkTheme
+import com.example.naughty.ui.oneui.components.OneUiBottomSheet
+import com.example.naughty.ui.oneui.theme.OneUi
 import com.example.naughty.util.ImageShareMode
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -59,75 +52,16 @@ fun ShareImageOptionSheet(
     onSelectMode: (ImageShareMode) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val isDark = isAppInDarkTheme()
-
-    val surfaceColor = if (isDark) DarkElevatedSurface else MaterialTheme.colorScheme.surface
-    val cardColor = if (isDark) Color(0xFF14151B) else Color(0xFFF4F4F6)
-    val textPrimary = if (isDark) Color.White else Color(0xFF18181B)
-    val textSecondary = if (isDark) Color(0xFFA1A1AA) else Color(0xFF71717A)
-
-    ModalBottomSheet(
-        onDismissRequest = {
-            if (!isProcessing) onDismiss()
-        },
-        sheetState = sheetState,
-        containerColor = surfaceColor,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        dragHandle = {
-            Box(
-                modifier = Modifier
-                    .padding(vertical = 12.dp)
-                    .size(width = 36.dp, height = 4.dp)
-                    .clip(CircleShape)
-                    .background(if (isDark) Color(0xFF3F3F46) else Color(0xFFD4D4D8))
-            )
-        }
+    OneUiBottomSheet(
+        title = "Save Shared Image",
+        subtitle = if (imageUris.size == 1) "1 image received" else "${imageUris.size} images received",
+        onDismiss = { if (!isProcessing) onDismiss() }
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .padding(bottom = 36.dp)
+                .padding(bottom = 24.dp)
         ) {
-            // Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column {
-                    Text(
-                        text = "Save Shared Image",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = textPrimary
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = if (imageUris.size == 1) "1 image received" else "${imageUris.size} images received",
-                        fontSize = 13.sp,
-                        color = textSecondary
-                    )
-                }
-
-                // Count Pill
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = cardColor
-                ) {
-                    Text(
-                        text = if (imageUris.size == 1) "Single Photo" else "${imageUris.size} Photos",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = ElectricCyan,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(18.dp))
-
             // Thumbnail Preview
             if (imageUris.isNotEmpty()) {
                 if (imageUris.size == 1) {
@@ -135,13 +69,15 @@ fun ShareImageOptionSheet(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(130.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(cardColor)
+                            .clip(OneUi.shapes.inner)
+                            .background(OneUi.colors.surfaceElevated)
                     ) {
                         AttachedImageThumbnail(
-                            imageRef = imageUris[0].toString(),
-                            modifier = Modifier.matchParentSize(),
-                            contentScale = ContentScale.Crop
+                            imageRef = imageUris.first().toString(),
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(130.dp)
                         )
                     }
                 } else {
@@ -149,57 +85,52 @@ fun ShareImageOptionSheet(
                         modifier = Modifier
                             .fillMaxWidth()
                             .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         imageUris.forEach { uri ->
                             Box(
                                 modifier = Modifier
-                                    .size(90.dp)
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(cardColor)
+                                    .size(width = 110.dp, height = 110.dp)
+                                    .clip(OneUi.shapes.inner)
+                                    .background(OneUi.colors.surfaceElevated)
                             ) {
                                 AttachedImageThumbnail(
                                     imageRef = uri.toString(),
-                                    modifier = Modifier.matchParentSize(),
-                                    contentScale = ContentScale.Crop
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.size(width = 110.dp, height = 110.dp)
                                 )
                             }
                         }
                     }
                 }
+                Spacer(modifier = Modifier.height(18.dp))
             }
 
-            Spacer(modifier = Modifier.height(22.dp))
-
-            // Processing state or Option buttons
-            AnimatedVisibility(
-                visible = isProcessing,
-                enter = fadeIn(),
-                exit = fadeOut()
-            ) {
+            // Processing State
+            if (isProcessing) {
                 Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    color = cardColor
+                    shape = OneUi.shapes.inner,
+                    color = OneUi.colors.surfaceElevated,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(20.dp),
+                            .padding(18.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(24.dp),
-                            strokeWidth = 2.5.dp,
-                            color = ElectricGreen
+                            color = OneUi.colors.accent,
+                            strokeWidth = 2.5.dp
                         )
-                        Spacer(modifier = Modifier.width(16.dp))
+                        Spacer(modifier = Modifier.width(14.dp))
                         Text(
-                            text = processingText.ifBlank { "Processing..." },
-                            fontSize = 14.sp,
+                            text = processingText.ifBlank { "Processing image..." },
+                            style = OneUi.typography.body,
                             fontWeight = FontWeight.Medium,
-                            color = textPrimary
+                            color = OneUi.colors.textPrimary
                         )
                     }
                 }
@@ -210,42 +141,28 @@ fun ShareImageOptionSheet(
                 enter = fadeIn(),
                 exit = fadeOut()
             ) {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // Option 1: Attach Image
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     ShareOptionCard(
                         icon = Icons.Outlined.Image,
-                        accentColor = ElectricCyan,
+                        accentColor = OneUi.badgePalette.blue,
                         title = "Attach Image",
                         description = "Create note with image attached as markdown",
-                        cardColor = cardColor,
-                        textPrimary = textPrimary,
-                        textSecondary = textSecondary,
                         onClick = { onSelectMode(ImageShareMode.IMAGE_ONLY) }
                     )
 
-                    // Option 2: Extract Text via OCR
                     ShareOptionCard(
                         icon = Icons.Outlined.DocumentScanner,
-                        accentColor = ElectricAmber,
+                        accentColor = OneUi.badgePalette.orange,
                         title = "Extract Text (OCR)",
                         description = "Transcribe on-device with ML Kit into a text note",
-                        cardColor = cardColor,
-                        textPrimary = textPrimary,
-                        textSecondary = textSecondary,
                         onClick = { onSelectMode(ImageShareMode.OCR_ONLY) }
                     )
 
-                    // Option 3: Both (Image + OCR Text)
                     ShareOptionCard(
                         icon = Icons.Outlined.AutoAwesome,
-                        accentColor = ElectricGreen,
+                        accentColor = OneUi.badgePalette.green,
                         title = "Both (Image & OCR Text)",
                         description = "Transcribe text and keep image attached at bottom",
-                        cardColor = cardColor,
-                        textPrimary = textPrimary,
-                        textSecondary = textSecondary,
                         onClick = { onSelectMode(ImageShareMode.BOTH) }
                     )
                 }
@@ -260,57 +177,51 @@ private fun ShareOptionCard(
     accentColor: Color,
     title: String,
     description: String,
-    cardColor: Color,
-    textPrimary: Color,
-    textSecondary: Color,
     onClick: () -> Unit
 ) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
+            .clip(OneUi.shapes.inner)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(18.dp),
-        color = cardColor
+        shape = OneUi.shapes.inner,
+        color = OneUi.colors.surfaceElevated
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 18.dp, vertical = 16.dp),
+                .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Icon Badge
             Box(
                 modifier = Modifier
-                    .size(44.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(accentColor.copy(alpha = 0.14f)),
+                    .size(42.dp)
+                    .clip(CircleShape)
+                    .background(accentColor.copy(alpha = 0.16f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
                     tint = accentColor,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(22.dp)
                 )
             }
 
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(14.dp))
 
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
-                    fontSize = 15.sp,
+                    style = OneUi.typography.body,
                     fontWeight = FontWeight.SemiBold,
-                    color = textPrimary
+                    color = OneUi.colors.textPrimary
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = description,
-                    fontSize = 12.sp,
-                    color = textSecondary
+                    style = OneUi.typography.caption,
+                    color = OneUi.colors.textSecondary
                 )
             }
         }

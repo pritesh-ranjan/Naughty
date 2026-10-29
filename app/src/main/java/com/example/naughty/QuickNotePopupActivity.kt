@@ -115,6 +115,8 @@ import com.example.naughty.ui.editor.ReminderBottomSheet
 import com.example.naughty.ui.editor.TextBlockItem
 import com.example.naughty.ui.editor.ThemeSelectionSheet
 import com.example.naughty.ui.notelist.AttachedImageThumbnail
+import com.example.naughty.ui.oneui.theme.OneUi
+import com.example.naughty.ui.oneui.theme.OneUiTheme
 import com.example.naughty.ui.theme.AmoledBlack
 import com.example.naughty.ui.theme.CrystalWhite
 import com.example.naughty.ui.theme.ElectricAmber
@@ -354,7 +356,7 @@ class QuickNotePopupActivity : FragmentActivity() {
         }
 
         setContent {
-            NaughtyTheme {
+            OneUiTheme {
                 val noteId = activeNoteId
                 if (noteId != null) {
                     val viewModel = remember(noteId) { container.noteEditorViewModel() }
@@ -550,12 +552,12 @@ fun QuickNotePopupScreen(
                 .heightIn(min = 260.dp, max = cardMaxHeight)
                 .padding(vertical = 12.dp)
                 .imePadding()
-                .shadow(24.dp, RoundedCornerShape(26.dp))
+                .shadow(24.dp, OneUi.shapes.card)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null
                 ) { /* consume clicks inside card */ },
-            shape = RoundedCornerShape(26.dp),
+            shape = OneUi.shapes.card,
             color = currentTheme.surface
         ) {
             Box(
@@ -580,16 +582,15 @@ fun QuickNotePopupScreen(
                         // Mode badge
                         val isTodo = isTodoMode || uiState.cardType == "todo"
                         Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = if (isTodo) ElectricGreen.copy(alpha = 0.15f) else ElectricCyan.copy(alpha = 0.15f)
+                            shape = OneUi.shapes.pill,
+                            color = if (isTodo) OneUi.badgePalette.green.copy(alpha = 0.16f) else OneUi.colors.accent.copy(alpha = 0.16f)
                         ) {
                             Text(
                                 text = if (isTodo) "☑️ TODO LIST" else "✨ QUICK NOTE",
-                                style = MaterialTheme.typography.labelSmall,
+                                style = OneUi.typography.badge,
                                 fontWeight = FontWeight.Bold,
-                                color = if (isTodo) ElectricGreen else ElectricCyan,
-                                fontSize = 11.sp,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                color = if (isTodo) OneUi.badgePalette.green else OneUi.colors.accent,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                             )
                         }
 
@@ -629,7 +630,7 @@ fun QuickNotePopupScreen(
                                 Icon(
                                     imageVector = Icons.Outlined.Check,
                                     contentDescription = "Save and Close",
-                                    tint = ElectricGreen,
+                                    tint = OneUi.badgePalette.green,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -862,10 +863,10 @@ fun QuickNotePopupScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 10.dp, vertical = 8.dp)
-                            .height(46.dp)
-                            .shadow(elevation = 8.dp, shape = RoundedCornerShape(23.dp)),
-                        shape = RoundedCornerShape(23.dp),
-                        color = if (isDark) AmoledBlack else CrystalWhite
+                            .height(48.dp)
+                            .shadow(elevation = 8.dp, shape = OneUi.shapes.pill),
+                        shape = OneUi.shapes.pill,
+                        color = OneUi.colors.surfaceElevated
                     ) {
                         CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
                             BoxWithConstraints(
@@ -894,7 +895,7 @@ fun QuickNotePopupScreen(
                                             Icon(
                                                 imageVector = Icons.Outlined.Add,
                                                 contentDescription = "Add block",
-                                                tint = if (isDark) ElectricGreen else AmoledBlack,
+                                                tint = OneUi.colors.accent,
                                                 modifier = Modifier.size(19.dp)
                                             )
                                         }
@@ -902,7 +903,8 @@ fun QuickNotePopupScreen(
                                         DropdownMenu(
                                             expanded = showAddBlockMenu,
                                             onDismissRequest = { showAddBlockMenu = false },
-                                            modifier = Modifier.background(if (isDark) AmoledBlack else CrystalWhite)
+                                            shape = OneUi.shapes.menu,
+                                            containerColor = OneUi.colors.surfaceElevated
                                         ) {
                                             DropdownMenuItem(
                                                 text = { Text("Checklist Item") },

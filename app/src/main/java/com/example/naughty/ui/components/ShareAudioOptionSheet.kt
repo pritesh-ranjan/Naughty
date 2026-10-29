@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Audiotrack
 import androidx.compose.material.icons.outlined.AutoAwesome
@@ -26,11 +25,8 @@ import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,11 +36,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.naughty.ui.theme.DarkElevatedSurface
-import com.example.naughty.ui.theme.ElectricAmber
-import com.example.naughty.ui.theme.ElectricCyan
-import com.example.naughty.ui.theme.ElectricGreen
-import com.example.naughty.ui.theme.isAppInDarkTheme
+import com.example.naughty.ui.oneui.components.OneUiBottomSheet
+import com.example.naughty.ui.oneui.theme.OneUi
 import com.example.naughty.util.AudioShareMode
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -58,269 +51,161 @@ fun ShareAudioOptionSheet(
     onSelectMode: (AudioShareMode) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val isDark = isAppInDarkTheme()
-
-    val surfaceColor = if (isDark) DarkElevatedSurface else MaterialTheme.colorScheme.surface
-    val cardColor = if (isDark) Color(0xFF14151B) else Color(0xFFF4F4F6)
-    val textPrimary = if (isDark) Color.White else Color(0xFF18181B)
-    val textSecondary = if (isDark) Color(0xFFA1A1AA) else Color(0xFF71717A)
-
-    ModalBottomSheet(
-        onDismissRequest = {
-            if (!isProcessing) onDismiss()
-        },
-        sheetState = sheetState,
-        containerColor = surfaceColor,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        dragHandle = {
-            Box(
-                modifier = Modifier
-                    .padding(vertical = 12.dp)
-                    .size(width = 36.dp, height = 4.dp)
-                    .clip(CircleShape)
-                    .background(if (isDark) Color(0xFF3F3F46) else Color(0xFFD4D4D8))
-            )
-        }
+    OneUiBottomSheet(
+        title = "Save Shared Audio",
+        subtitle = if (audioUris.size == 1) "1 audio recording received" else "${audioUris.size} audio recordings received",
+        onDismiss = { if (!isProcessing) onDismiss() }
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .padding(bottom = 36.dp)
+                .padding(bottom = 24.dp)
         ) {
-            // Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column {
-                    Text(
-                        text = "Save Shared Audio",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = textPrimary
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = if (audioUris.size == 1) "1 voice recording received" else "${audioUris.size} recordings received",
-                        fontSize = 13.sp,
-                        color = textSecondary
-                    )
-                }
-
-                // Count Pill
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = if (isDark) Color(0xFF26262F) else Color(0xFFE4E4E7),
-                    modifier = Modifier.padding(start = 8.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Audiotrack,
-                            contentDescription = null,
-                            tint = ElectricGreen,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Text(
-                            text = "${audioUris.size}",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = textPrimary
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Audio info preview banner
+            // Audio info card
             Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                color = cardColor
+                shape = OneUi.shapes.inner,
+                color = OneUi.colors.surfaceElevated,
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(14.dp),
+                    modifier = Modifier.padding(14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(42.dp)
+                            .size(40.dp)
                             .clip(CircleShape)
-                            .background(ElectricGreen.copy(alpha = 0.15f)),
+                            .background(OneUi.badgePalette.purple.copy(alpha = 0.16f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Outlined.Mic,
+                            imageVector = Icons.Outlined.Audiotrack,
                             contentDescription = null,
-                            tint = ElectricGreen,
-                            modifier = Modifier.size(22.dp)
+                            tint = OneUi.badgePalette.purple,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = subject?.ifBlank { null } ?: "Incoming Voice Note",
-                            style = MaterialTheme.typography.titleSmall,
+                            text = subject?.ifBlank { null } ?: "Audio voice note",
+                            style = OneUi.typography.body,
                             fontWeight = FontWeight.SemiBold,
-                            color = textPrimary,
-                            maxLines = 1
+                            color = OneUi.colors.textPrimary
                         )
                         if (!text.isNullOrBlank()) {
                             Text(
                                 text = text,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = textSecondary,
+                                style = OneUi.typography.caption,
+                                color = OneUi.colors.textSecondary,
                                 maxLines = 1
-                            )
-                        } else {
-                            Text(
-                                text = "Ready to attach or transcribe",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = textSecondary
                             )
                         }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(22.dp))
+            Spacer(modifier = Modifier.height(18.dp))
 
-            // Progress Overlay while transcribing
-            AnimatedVisibility(
-                visible = isProcessing,
-                enter = fadeIn(),
-                exit = fadeOut()
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+            // Processing state
+            if (isProcessing) {
+                Surface(
+                    shape = OneUi.shapes.inner,
+                    color = OneUi.colors.surfaceElevated,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(36.dp),
-                        color = ElectricGreen,
-                        strokeWidth = 3.dp
-                    )
-                    Spacer(modifier = Modifier.height(14.dp))
-                    Text(
-                        text = processingText.ifBlank { "Processing audio..." },
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = textPrimary
-                    )
-                    Text(
-                        text = "Transcribing 100% on-device offline",
-                        fontSize = 12.sp,
-                        color = textSecondary
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(18.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = OneUi.colors.accent,
+                            strokeWidth = 2.5.dp
+                        )
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Text(
+                            text = processingText.ifBlank { "Processing audio..." },
+                            style = OneUi.typography.body,
+                            fontWeight = FontWeight.Medium,
+                            color = OneUi.colors.textPrimary
+                        )
+                    }
                 }
             }
 
-            if (!isProcessing) {
-                Text(
-                    text = "CHOOSE NOTE FORMAT",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = textSecondary,
-                    letterSpacing = 0.8.sp,
-                    modifier = Modifier.padding(start = 2.dp, bottom = 12.dp)
-                )
+            AnimatedVisibility(
+                visible = !isProcessing,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    AudioShareOptionCard(
+                        icon = Icons.Outlined.Mic,
+                        accentColor = OneUi.badgePalette.blue,
+                        title = "Attach Voice Note",
+                        description = "Save with playable audio waveform player",
+                        onClick = { onSelectMode(AudioShareMode.ATTACH_ONLY) }
+                    )
 
-                // Option 1: Attach Voice Note
-                AudioOptionActionCard(
-                    title = "Attach Voice Note",
-                    subtitle = "Embed as interactive WhatsApp-style audio player with waveform",
-                    icon = Icons.Outlined.Mic,
-                    accentColor = ElectricGreen,
-                    cardColor = cardColor,
-                    textPrimary = textPrimary,
-                    textSecondary = textSecondary,
-                    isDark = isDark,
-                    onClick = { onSelectMode(AudioShareMode.ATTACH_ONLY) }
-                )
+                    AudioShareOptionCard(
+                        icon = Icons.Outlined.RecordVoiceOver,
+                        accentColor = OneUi.badgePalette.orange,
+                        title = "Transcribe to Text Note",
+                        description = "Transcribe speech on-device into text",
+                        onClick = { onSelectMode(AudioShareMode.TRANSCRIBE_ONLY) }
+                    )
 
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Option 2: Transcribe Speech
-                AudioOptionActionCard(
-                    title = "Transcribe Audio",
-                    subtitle = "Transcribe speech offline and save as a written text note",
-                    icon = Icons.Outlined.RecordVoiceOver,
-                    accentColor = ElectricCyan,
-                    cardColor = cardColor,
-                    textPrimary = textPrimary,
-                    textSecondary = textSecondary,
-                    isDark = isDark,
-                    onClick = { onSelectMode(AudioShareMode.TRANSCRIBE_ONLY) }
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Option 3: Both
-                AudioOptionActionCard(
-                    title = "Both (Audio & Transcript)",
-                    subtitle = "Transcribe recognized speech and attach the voice note below it",
-                    icon = Icons.Outlined.AutoAwesome,
-                    accentColor = ElectricAmber,
-                    cardColor = cardColor,
-                    textPrimary = textPrimary,
-                    textSecondary = textSecondary,
-                    isDark = isDark,
-                    onClick = { onSelectMode(AudioShareMode.BOTH) }
-                )
+                    AudioShareOptionCard(
+                        icon = Icons.Outlined.AutoAwesome,
+                        accentColor = OneUi.badgePalette.green,
+                        title = "Both (Audio & Transcript)",
+                        description = "Attach audio waveform and append transcribed text",
+                        onClick = { onSelectMode(AudioShareMode.BOTH) }
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun AudioOptionActionCard(
-    title: String,
-    subtitle: String,
+private fun AudioShareOptionCard(
     icon: ImageVector,
     accentColor: Color,
-    cardColor: Color,
-    textPrimary: Color,
-    textSecondary: Color,
-    isDark: Boolean,
+    title: String,
+    description: String,
     onClick: () -> Unit
 ) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(OneUi.shapes.inner)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
-        color = cardColor
+        shape = OneUi.shapes.inner,
+        color = OneUi.colors.surfaceElevated
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
+                .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
                 modifier = Modifier
                     .size(42.dp)
                     .clip(CircleShape)
-                    .background(accentColor.copy(alpha = if (isDark) 0.16f else 0.12f)),
+                    .background(accentColor.copy(alpha = 0.16f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
                     tint = accentColor,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(22.dp)
                 )
             }
 
@@ -329,16 +214,15 @@ private fun AudioOptionActionCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
-                    fontSize = 15.sp,
+                    style = OneUi.typography.body,
                     fontWeight = FontWeight.SemiBold,
-                    color = textPrimary
+                    color = OneUi.colors.textPrimary
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = subtitle,
-                    fontSize = 12.sp,
-                    color = textSecondary,
-                    lineHeight = 16.sp
+                    text = description,
+                    style = OneUi.typography.caption,
+                    color = OneUi.colors.textSecondary
                 )
             }
         }

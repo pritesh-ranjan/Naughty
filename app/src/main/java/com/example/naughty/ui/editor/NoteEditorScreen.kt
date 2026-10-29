@@ -96,6 +96,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material.icons.outlined.DocumentScanner
 import androidx.compose.foundation.horizontalScroll
+import com.example.naughty.ui.oneui.theme.OneUi
+import com.example.naughty.ui.oneui.components.OneUiConfirmDialog
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.Fingerprint
@@ -554,7 +556,8 @@ fun NoteEditorScreen(
                             DropdownMenu(
                                 expanded = showShareMenu,
                                 onDismissRequest = { showShareMenu = false },
-                                modifier = Modifier.background(if (isDark) AmoledBlack else CrystalWhite)
+                                shape = OneUi.shapes.menu,
+                                containerColor = OneUi.colors.surfaceElevated
                             ) {
                                 DropdownMenuItem(
                                     text = { Text("Share as text") },
@@ -643,7 +646,8 @@ fun NoteEditorScreen(
                             DropdownMenu(
                                 expanded = showMenu,
                                 onDismissRequest = { showMenu = false },
-                                modifier = Modifier.background(if (isDark) AmoledBlack else CrystalWhite)
+                                shape = OneUi.shapes.menu,
+                                containerColor = OneUi.colors.surfaceElevated
                             ) {
                                 DropdownMenuItem(
                                     text = { Text(if (uiState.isPinned) "Unpin note" else "Pin note") },
@@ -1311,12 +1315,12 @@ fun NoteEditorScreen(
                     .imePadding()
                     .padding(bottom = 14.dp, start = 16.dp, end = 16.dp)
                     .height(54.dp)
-                    .shadow(elevation = 16.dp, shape = RoundedCornerShape(27.dp))
+                    .shadow(elevation = 12.dp, shape = OneUi.shapes.pill)
                     .onGloballyPositioned { coordinates ->
                         toolbarBounds = coordinates.boundsInRoot()
                     },
-                shape = RoundedCornerShape(27.dp),
-                color = if (isDark) AmoledBlack else CrystalWhite
+                shape = OneUi.shapes.pill,
+                color = OneUi.colors.surfaceElevated
             ) {
                 CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
                     BoxWithConstraints(
@@ -1353,7 +1357,8 @@ fun NoteEditorScreen(
                         DropdownMenu(
                             expanded = showAddBlockMenu,
                             onDismissRequest = { showAddBlockMenu = false },
-                            modifier = Modifier.background(if (isDark) AmoledBlack else CrystalWhite)
+                            shape = OneUi.shapes.menu,
+                            containerColor = OneUi.colors.surfaceElevated
                         ) {
                             DropdownMenuItem(
                                 text = { Text("Checklist Item") },
@@ -1741,81 +1746,50 @@ fun NoteEditorScreen(
     }
 
         if (showDeleteNoteConfirmDialog) {
-            AlertDialog(
-                onDismissRequest = { showDeleteNoteConfirmDialog = false },
-                title = { Text("Delete Note?") },
-                text = { Text("Are you sure you want to delete this note? It will be moved to Trash.") },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            showDeleteNoteConfirmDialog = false
-                            viewModel.deleteNote { onBack() }
-                        },
-                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                    ) {
-                        Text("Delete")
-                    }
+            OneUiConfirmDialog(
+                title = "Delete Note?",
+                message = "Are you sure you want to delete this note? It will be moved to Trash.",
+                confirmLabel = "Delete",
+                destructive = true,
+                onConfirm = {
+                    showDeleteNoteConfirmDialog = false
+                    viewModel.deleteNote { onBack() }
                 },
-                dismissButton = {
-                    TextButton(onClick = { showDeleteNoteConfirmDialog = false }) {
-                        Text("Cancel")
-                    }
-                }
+                onDismiss = { showDeleteNoteConfirmDialog = false }
             )
         }
 
         if (imageToDelete != null) {
-            AlertDialog(
-                onDismissRequest = { imageToDelete = null },
-                title = { Text("Delete Image?") },
-                text = { Text("Are you sure you want to remove this image from the note?") },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            val uri = imageToDelete
-                            imageToDelete = null
-                            if (uri != null) {
-                                if (fullscreenImageUri == uri) {
-                                    fullscreenImageUri = null
-                                }
-                                viewModel.removeImage(uri)
-                            }
-                        },
-                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                    ) {
-                        Text("Delete")
+            OneUiConfirmDialog(
+                title = "Delete Image?",
+                message = "Are you sure you want to remove this image from the note?",
+                confirmLabel = "Delete",
+                destructive = true,
+                onConfirm = {
+                    val uri = imageToDelete
+                    imageToDelete = null
+                    if (uri != null) {
+                        if (fullscreenImageUri == uri) {
+                            fullscreenImageUri = null
+                        }
+                        viewModel.removeImage(uri)
                     }
                 },
-                dismissButton = {
-                    TextButton(onClick = { imageToDelete = null }) {
-                        Text("Cancel")
-                    }
-                }
+                onDismiss = { imageToDelete = null }
             )
         }
 
         if (showNoSecurityDialog) {
-            AlertDialog(
-                onDismissRequest = { showNoSecurityDialog = false },
-                title = { Text("Screen Lock Required") },
-                text = {
-                    Text("To lock notes with system security, please set up a PIN, pattern, password, or biometric in your device Settings.")
+            OneUiConfirmDialog(
+                title = "Screen Lock Required",
+                message = "To lock notes with system security, please set up a PIN, pattern, password, or biometric in your device Settings.",
+                confirmLabel = "Open Settings",
+                destructive = false,
+                onConfirm = {
+                    showNoSecurityDialog = false
+                    BiometricAuthHelper.openSecuritySettings(context)
                 },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            showNoSecurityDialog = false
-                            BiometricAuthHelper.openSecuritySettings(context)
-                        }
-                    ) {
-                        Text("Open Settings")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showNoSecurityDialog = false }) {
-                        Text("Cancel")
-                    }
-                }
+                onDismiss = { showNoSecurityDialog = false }
             )
         }
 

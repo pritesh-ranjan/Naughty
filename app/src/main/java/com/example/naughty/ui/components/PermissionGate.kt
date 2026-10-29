@@ -11,12 +11,12 @@ import android.os.Build
 import android.os.PowerManager
 import android.os.Process
 import android.provider.Settings
-import androidx.core.content.ContextCompat
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -24,29 +24,31 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.example.naughty.ui.oneui.components.OneUiCard
+import com.example.naughty.ui.oneui.components.OneUiFilledButton
+import com.example.naughty.ui.oneui.components.OneUiIconBadge
+import com.example.naughty.ui.oneui.components.OneUiTonalButton
+import com.example.naughty.ui.oneui.theme.OneUi
 
 @Suppress("DEPRECATION")
 fun hasUsageStatsPermission(context: Context): Boolean {
@@ -190,107 +192,107 @@ fun PermissionGate(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 32.dp, vertical = 48.dp),
+                    .background(OneUi.colors.background)
+                    .padding(horizontal = OneUi.dimens.horizontalMargin, vertical = 32.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                Icon(
-                    painter = painterResource(android.R.drawable.ic_dialog_info),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(48.dp)
+                OneUiIconBadge(
+                    icon = Icons.Outlined.Security,
+                    iconTint = OneUi.colors.accent,
+                    backgroundColor = OneUi.colors.accent.copy(alpha = 0.16f),
+                    size = 56.dp
                 )
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(20.dp))
 
                 Text(
-                    text = "Permissions needed",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.onBackground
+                    text = "Permissions Needed",
+                    style = OneUi.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = OneUi.colors.textPrimary
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 Text(
                     text = "Naughty needs Usage Access to detect which app you're using, and Notification permission to surface your notes at the right moment.",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
+                    style = OneUi.typography.body,
+                    color = OneUi.colors.textSecondary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 12.dp)
                 )
 
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(28.dp))
 
-                if (!hasUsageStats) {
-                    Button(
-                        onClick = {
-                            try {
-                                val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
-                                    data = Uri.parse("package:${context.packageName}")
-                                }
-                                usageStatsLauncher.launch(intent)
-                            } catch (_: Exception) {
-                                usageStatsLauncher.launch(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary
-                        )
+                OneUiCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = OneUi.shapes.card,
+                    containerColor = OneUi.colors.surfaceElevated
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Text("Grant Usage Access", modifier = Modifier.padding(vertical = 4.dp))
+                        if (!hasUsageStats) {
+                            OneUiFilledButton(
+                                text = "Grant Usage Access",
+                                onClick = {
+                                    try {
+                                        val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
+                                            data = Uri.parse("package:${context.packageName}")
+                                        }
+                                        usageStatsLauncher.launch(intent)
+                                    } catch (_: Exception) {
+                                        usageStatsLauncher.launch(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+
+                        if (!hasNotifications && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            OneUiFilledButton(
+                                text = "Allow Notifications",
+                                onClick = {
+                                    notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+
+                        if (!hasBatteryOptimization) {
+                            OneUiTonalButton(
+                                text = "Unrestricted Battery (Recommended)",
+                                onClick = {
+                                    try {
+                                        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                                            data = Uri.parse("package:${context.packageName}")
+                                        }
+                                        batteryLauncher.launch(intent)
+                                    } catch (_: Exception) {
+                                        try {
+                                            batteryLauncher.launch(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+                                        } catch (_: Exception) {}
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
                     }
-                    Spacer(modifier = Modifier.height(12.dp))
                 }
 
-                if (!hasNotifications && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    Button(
-                        onClick = {
-                            notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary
-                        )
-                    ) {
-                        Text("Allow Notifications", modifier = Modifier.padding(vertical = 4.dp))
-                    }
-                    Spacer(modifier = Modifier.height(12.dp))
-                }
-
-                if (!hasBatteryOptimization) {
-                    Button(
-                        onClick = {
-                            try {
-                                val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                                    data = Uri.parse("package:${context.packageName}")
-                                }
-                                batteryLauncher.launch(intent)
-                            } catch (_: Exception) {
-                                try {
-                                    batteryLauncher.launch(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-                                } catch (_: Exception) {}
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    ) {
-                        Text("Unrestricted Battery (Recommended)", modifier = Modifier.padding(vertical = 4.dp))
-                    }
-                    Spacer(modifier = Modifier.height(12.dp))
-                }
+                Spacer(modifier = Modifier.height(16.dp))
 
                 TextButton(
                     onClick = { dismissed = true }
                 ) {
                     Text(
                         "Skip for now",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        style = OneUi.typography.subhead,
+                        color = OneUi.colors.textSecondary
                     )
                 }
             }

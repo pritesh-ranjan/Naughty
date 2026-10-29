@@ -19,10 +19,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AlternateEmail
@@ -34,7 +32,6 @@ import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -48,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -58,11 +56,8 @@ import com.example.naughty.data.mention.MentionRepository
 import com.example.naughty.data.mention.MentionType
 import com.example.naughty.ui.components.hasCalendarPermission
 import com.example.naughty.ui.components.hasContactsPermission
-import com.example.naughty.ui.theme.AmoledBlack
-import com.example.naughty.ui.theme.ElectricAmber
-import com.example.naughty.ui.theme.ElectricCyan
-import com.example.naughty.ui.theme.ElectricGreen
-import com.example.naughty.ui.theme.isAppInDarkTheme
+import com.example.naughty.ui.oneui.components.OneUiIconBadge
+import com.example.naughty.ui.oneui.theme.OneUi
 
 @Composable
 fun MentionSuggestionSheet(
@@ -72,7 +67,6 @@ fun MentionSuggestionSheet(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val isDark = isAppInDarkTheme()
 
     var selectedFilter by remember { mutableStateOf<MentionType?>(null) }
     var results by remember { mutableStateOf<List<MentionItem>>(emptyList()) }
@@ -103,21 +97,20 @@ fun MentionSuggestionSheet(
         isLoading = false
     }
 
-    val surfaceColor = if (isDark) Color(0xFF141418) else Color(0xFFFAFAFC)
-    val borderColor = if (isDark) Color(0xFF27272F) else Color(0xFFE4E4E7)
+    val sheetShape = OneUi.shapes.sheet
 
     Surface(
-        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
-        color = surfaceColor,
-        shadowElevation = 12.dp,
+        shape = sheetShape,
+        color = OneUi.colors.surfaceElevated,
+        shadowElevation = 16.dp,
         modifier = modifier
             .fillMaxWidth()
-            .shadow(16.dp, RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
+            .shadow(16.dp, sheetShape)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 10.dp)
+                .padding(horizontal = OneUi.dimens.horizontalMargin, vertical = 12.dp)
         ) {
             // Header: @Query indicator + Close button
             Row(
@@ -126,84 +119,72 @@ fun MentionSuggestionSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Surface(
-                        shape = CircleShape,
-                        color = ElectricCyan.copy(alpha = 0.16f),
-                        modifier = Modifier.size(26.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Outlined.AlternateEmail,
-                                contentDescription = null,
-                                tint = ElectricCyan,
-                                modifier = Modifier.size(15.dp)
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
+                    OneUiIconBadge(
+                        icon = Icons.Outlined.AlternateEmail,
+                        iconTint = OneUi.colors.accent,
+                        backgroundColor = OneUi.colors.accent.copy(alpha = 0.16f),
+                        size = 28.dp
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
                     Text(
-                        text = if (query.isBlank()) "Reference item" else "Referencing \"$query\"",
-                        style = MaterialTheme.typography.titleSmall,
+                        text = if (query.isBlank()) "Reference Item" else "Referencing \"$query\"",
+                        style = OneUi.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = OneUi.colors.textPrimary
                     )
                 }
 
                 IconButton(
                     onClick = onDismiss,
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(30.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Close,
                         contentDescription = "Dismiss",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = OneUi.colors.textSecondary,
                         modifier = Modifier.size(18.dp)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             // Filter Pills: All, Contacts, Apps, Calendar
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 FilterPill(
                     label = "All",
                     selected = selectedFilter == null,
-                    onClick = { selectedFilter = null },
-                    isDark = isDark
+                    onClick = { selectedFilter = null }
                 )
                 FilterPill(
                     label = "Contacts",
                     icon = Icons.Outlined.Person,
                     selected = selectedFilter == MentionType.CONTACT,
                     onClick = { selectedFilter = MentionType.CONTACT },
-                    isDark = isDark,
-                    activeColor = ElectricGreen
+                    activeColor = OneUi.badgePalette.green
                 )
                 FilterPill(
                     label = "Apps",
                     icon = Icons.Outlined.Apps,
                     selected = selectedFilter == MentionType.APP,
                     onClick = { selectedFilter = MentionType.APP },
-                    isDark = isDark,
-                    activeColor = ElectricCyan
+                    activeColor = OneUi.colors.accent
                 )
                 FilterPill(
                     label = "Calendar",
                     icon = Icons.Outlined.CalendarMonth,
                     selected = selectedFilter == MentionType.CALENDAR,
                     onClick = { selectedFilter = MentionType.CALENDAR },
-                    isDark = isDark,
-                    activeColor = ElectricAmber
+                    activeColor = OneUi.badgePalette.orange
                 )
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             // Permission Request Banners if permission is missing
             val showContactsPrompt = (!hasContacts) && (selectedFilter == null || selectedFilter == MentionType.CONTACT)
@@ -213,22 +194,20 @@ fun MentionSuggestionSheet(
                 PermissionPromptRow(
                     text = "Grant Contacts access to search & reference contacts",
                     buttonText = "Grant",
-                    isDark = isDark,
-                    tint = ElectricGreen,
+                    tint = OneUi.badgePalette.green,
                     onGrant = { contactsPermissionLauncher.launch(Manifest.permission.READ_CONTACTS) }
                 )
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(6.dp))
             }
 
             if (showCalendarPrompt) {
                 PermissionPromptRow(
                     text = "Grant Calendar access to search & reference events",
                     buttonText = "Grant",
-                    isDark = isDark,
-                    tint = ElectricAmber,
+                    tint = OneUi.badgePalette.orange,
                     onGrant = { calendarPermissionLauncher.launch(Manifest.permission.READ_CALENDAR) }
                 )
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(6.dp))
             }
 
             // Results List
@@ -242,7 +221,7 @@ fun MentionSuggestionSheet(
                     CircularProgressIndicator(
                         modifier = Modifier.size(24.dp),
                         strokeWidth = 2.dp,
-                        color = ElectricCyan
+                        color = OneUi.colors.accent
                     )
                 }
             } else if (results.isEmpty()) {
@@ -254,8 +233,8 @@ fun MentionSuggestionSheet(
                 ) {
                     Text(
                         text = if (query.isBlank()) "No items found" else "No matches for \"$query\"",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        style = OneUi.typography.subhead,
+                        color = OneUi.colors.textSecondary
                     )
                 }
             } else {
@@ -267,7 +246,6 @@ fun MentionSuggestionSheet(
                     itemsIndexed(results, key = { index, item -> "${item.type}_${item.id}_$index" }) { _, item ->
                         MentionItemRow(
                             item = item,
-                            isDark = isDark,
                             onClick = { onSelect(item) }
                         )
                     }
@@ -280,42 +258,41 @@ fun MentionSuggestionSheet(
 @Composable
 private fun FilterPill(
     label: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    icon: ImageVector? = null,
     selected: Boolean,
     onClick: () -> Unit,
-    isDark: Boolean,
-    activeColor: Color = ElectricCyan
+    activeColor: Color = OneUi.colors.accent
 ) {
     val bgColor = if (selected) {
-        activeColor.copy(alpha = if (isDark) 0.22f else 0.14f)
+        activeColor.copy(alpha = 0.18f)
     } else {
-        if (isDark) Color(0xFF1E1E24) else Color(0xFFEDEDF0)
+        OneUi.colors.surfaceVariant
     }
-    val contentColor = if (selected) activeColor else MaterialTheme.colorScheme.onSurfaceVariant
+    val contentColor = if (selected) activeColor else OneUi.colors.textSecondary
 
     Surface(
-        shape = RoundedCornerShape(12.dp),
+        shape = OneUi.shapes.pill,
         color = bgColor,
         modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
+            .clip(OneUi.shapes.pill)
             .clickable(onClick = onClick)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp)
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
         ) {
             if (icon != null) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
                     tint = contentColor,
-                    modifier = Modifier.size(13.dp)
+                    modifier = Modifier.size(14.dp)
                 )
-                Spacer(modifier = Modifier.width(4.dp))
+                Spacer(modifier = Modifier.width(6.dp))
             }
             Text(
                 text = label,
-                fontSize = 12.sp,
+                style = OneUi.typography.badge,
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                 color = contentColor
             )
@@ -327,17 +304,16 @@ private fun FilterPill(
 private fun PermissionPromptRow(
     text: String,
     buttonText: String,
-    isDark: Boolean,
     tint: Color,
     onGrant: () -> Unit
 ) {
     Surface(
-        shape = RoundedCornerShape(10.dp),
-        color = tint.copy(alpha = if (isDark) 0.12f else 0.08f),
+        shape = OneUi.shapes.inner,
+        color = tint.copy(alpha = 0.12f),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -349,31 +325,32 @@ private fun PermissionPromptRow(
                     imageVector = Icons.Outlined.Lock,
                     contentDescription = null,
                     tint = tint,
-                    modifier = Modifier.size(14.dp)
+                    modifier = Modifier.size(16.dp)
                 )
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = text,
-                    fontSize = 11.5.sp,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    style = OneUi.typography.subhead,
+                    fontSize = 12.sp,
+                    color = OneUi.colors.textPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
             Spacer(modifier = Modifier.width(8.dp))
             Surface(
-                shape = RoundedCornerShape(6.dp),
+                shape = OneUi.shapes.pill,
                 color = tint.copy(alpha = 0.22f),
                 modifier = Modifier
-                    .clip(RoundedCornerShape(6.dp))
+                    .clip(OneUi.shapes.pill)
                     .clickable(onClick = onGrant)
             ) {
                 Text(
                     text = buttonText,
-                    fontSize = 11.sp,
+                    style = OneUi.typography.badge,
                     fontWeight = FontWeight.Bold,
                     color = tint,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                 )
             }
         }
@@ -383,55 +360,45 @@ private fun PermissionPromptRow(
 @Composable
 private fun MentionItemRow(
     item: MentionItem,
-    isDark: Boolean,
     onClick: () -> Unit
 ) {
     val (typeColor, typeIcon, typeLabel) = when (item.type) {
-        MentionType.CONTACT -> Triple(ElectricGreen, Icons.Outlined.Person, "Contact")
-        MentionType.APP -> Triple(ElectricCyan, Icons.Outlined.Apps, "App")
-        MentionType.CALENDAR -> Triple(ElectricAmber, Icons.Outlined.CalendarMonth, "Calendar")
+        MentionType.CONTACT -> Triple(OneUi.badgePalette.green, Icons.Outlined.Person, "Contact")
+        MentionType.APP -> Triple(OneUi.colors.accent, Icons.Outlined.Apps, "App")
+        MentionType.CALENDAR -> Triple(OneUi.badgePalette.orange, Icons.Outlined.CalendarMonth, "Calendar")
     }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
+            .clip(OneUi.shapes.inner)
             .clickable(onClick = onClick)
             .padding(horizontal = 8.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Surface(
-            shape = CircleShape,
-            color = typeColor.copy(alpha = 0.15f),
-            modifier = Modifier.size(32.dp)
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    imageVector = typeIcon,
-                    contentDescription = null,
-                    tint = typeColor,
-                    modifier = Modifier.size(17.dp)
-                )
-            }
-        }
+        OneUiIconBadge(
+            icon = typeIcon,
+            iconTint = typeColor,
+            backgroundColor = typeColor.copy(alpha = 0.16f),
+            size = 34.dp
+        )
 
-        Spacer(modifier = Modifier.width(10.dp))
+        Spacer(modifier = Modifier.width(12.dp))
 
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = item.title,
-                style = MaterialTheme.typography.bodyMedium,
+                style = OneUi.typography.body,
                 fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = OneUi.colors.textPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             if (!item.subtitle.isNullOrBlank()) {
                 Text(
                     text = item.subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 11.sp,
+                    style = OneUi.typography.bodySmall,
+                    color = OneUi.colors.textSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -441,15 +408,15 @@ private fun MentionItemRow(
         Spacer(modifier = Modifier.width(8.dp))
 
         Surface(
-            shape = RoundedCornerShape(6.dp),
+            shape = OneUi.shapes.pill,
             color = typeColor.copy(alpha = 0.12f)
         ) {
             Text(
                 text = typeLabel,
-                fontSize = 10.sp,
+                style = OneUi.typography.badge,
                 fontWeight = FontWeight.SemiBold,
                 color = typeColor,
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
             )
         }
     }

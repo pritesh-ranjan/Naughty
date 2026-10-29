@@ -1,27 +1,18 @@
 package com.example.naughty.ui.components
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AlternateEmail
 import androidx.compose.material.icons.outlined.Apps
-import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DocumentScanner
 import androidx.compose.material.icons.outlined.GraphicEq
 import androidx.compose.material.icons.outlined.Lock
@@ -29,35 +20,28 @@ import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Timeline
-import androidx.compose.material3.BottomSheetDefaults
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.naughty.ui.theme.AmoledBlack
-import com.example.naughty.ui.theme.CrystalWhite
+import com.example.naughty.ui.oneui.components.OneUiBottomSheet
+import com.example.naughty.ui.oneui.components.OneUiCard
+import com.example.naughty.ui.oneui.components.OneUiFilledButton
+import com.example.naughty.ui.oneui.components.OneUiIconBadge
+import com.example.naughty.ui.oneui.theme.OneUi
 import com.example.naughty.ui.theme.ElectricAmber
 import com.example.naughty.ui.theme.ElectricCyan
 import com.example.naughty.ui.theme.ElectricGreen
 import com.example.naughty.ui.theme.ElectricPink
 import com.example.naughty.ui.theme.ElectricPurple
-import com.example.naughty.ui.theme.isAppInDarkTheme
 
 data class FeatureShowcaseItem(
     val title: String,
@@ -149,93 +133,27 @@ fun FeatureShowcaseSheet(
     isFirstLaunch: Boolean,
     onDismiss: () -> Unit
 ) {
-    val isDark = isAppInDarkTheme()
     val scrollState = rememberScrollState()
     val items = remember { getFeatureShowcaseItems() }
 
-    ModalBottomSheet(
+    OneUiBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = if (isDark) Color(0xFF121417) else Color(0xFFF9FAFB),
-        dragHandle = { BottomSheetDefaults.DragHandle() }
+        title = if (isFirstLaunch) "Welcome to Naughty" else "What's New in Naughty",
+        subtitle = "v$versionName ($versionCode) • ${if (isFirstLaunch) "First Launch" else "Updated"}"
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp)
+                .padding(horizontal = OneUi.dimens.horizontalMargin)
         ) {
-            // Header Row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = if (isDark) ElectricGreen.copy(alpha = 0.15f) else AmoledBlack.copy(alpha = 0.08f),
-                        modifier = Modifier.size(42.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Outlined.AutoAwesome,
-                                contentDescription = null,
-                                tint = if (isDark) ElectricGreen else AmoledBlack,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.width(14.dp))
-                    Column {
-                        Text(
-                            text = if (isFirstLaunch) "Welcome to Naughty" else "What's New in Naughty",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(top = 2.dp)
-                        ) {
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = if (isDark) ElectricGreen.copy(alpha = 0.15f) else AmoledBlack.copy(alpha = 0.08f)
-                            ) {
-                                Text(
-                                    text = if (isFirstLaunch) "v$versionName • First Launch" else "v$versionName • Updated",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isDark) ElectricGreen else AmoledBlack,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-
-                IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
-                    Icon(
-                        imageVector = Icons.Outlined.Close,
-                        contentDescription = "Dismiss",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
             Text(
                 text = if (isFirstLaunch) {
-                    "Your fast, context-aware, 100% offline note-taking hub. Here are the key features at your fingertips:"
+                    "Your fast, context-aware, 100% offline note-taking hub. Here are key highlights at your fingertips:"
                 } else {
                     "Here is what makes your notes private, smart, and fast in this release:"
                 },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = OneUi.typography.subhead,
+                color = OneUi.colors.textSecondary,
                 lineHeight = 20.sp
             )
 
@@ -244,12 +162,13 @@ fun FeatureShowcaseSheet(
             // Scrollable feature list
             Column(
                 modifier = Modifier
+                    .fillMaxWidth()
                     .weight(1f, fill = false)
                     .verticalScroll(scrollState),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 items.forEach { item ->
-                    FeatureItemRow(item = item, isDark = isDark)
+                    FeatureItemRow(item = item)
                 }
                 Spacer(modifier = Modifier.height(8.dp))
             }
@@ -257,24 +176,11 @@ fun FeatureShowcaseSheet(
             Spacer(modifier = Modifier.height(16.dp))
 
             // Bottom Action Button
-            Button(
+            OneUiFilledButton(
+                text = if (isFirstLaunch) "Explore Naughty" else "Got It, Let's Go",
                 onClick = onDismiss,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp)
-                    .navigationBarsPadding(),
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isDark) ElectricGreen else AmoledBlack,
-                    contentColor = if (isDark) AmoledBlack else CrystalWhite
-                )
-            ) {
-                Text(
-                    text = if (isFirstLaunch) "Explore Naughty" else "Got It, Let's Go",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp
-                )
-            }
+                modifier = Modifier.fillMaxWidth()
+            )
 
             Spacer(modifier = Modifier.height(12.dp))
         }
@@ -282,17 +188,10 @@ fun FeatureShowcaseSheet(
 }
 
 @Composable
-private fun FeatureItemRow(
-    item: FeatureShowcaseItem,
-    isDark: Boolean
-) {
-    Surface(
-        shape = RoundedCornerShape(14.dp),
-        color = if (isDark) Color(0xFF191C22) else Color(0xFFF1F3F5),
-        border = androidx.compose.foundation.BorderStroke(
-            width = 1.dp,
-            color = if (isDark) Color(0xFF282C34) else Color(0xFFE2E5E9)
-        ),
+private fun FeatureItemRow(item: FeatureShowcaseItem) {
+    OneUiCard(
+        shape = OneUi.shapes.inner,
+        containerColor = OneUi.colors.surfaceElevated,
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -301,20 +200,12 @@ private fun FeatureItemRow(
                 .padding(14.dp),
             verticalAlignment = Alignment.Top
         ) {
-            Surface(
-                shape = RoundedCornerShape(10.dp),
-                color = item.accentColor.copy(alpha = if (isDark) 0.18f else 0.12f),
-                modifier = Modifier.size(38.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = item.icon,
-                        contentDescription = null,
-                        tint = item.accentColor,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
+            OneUiIconBadge(
+                icon = item.icon,
+                iconTint = item.accentColor,
+                backgroundColor = item.accentColor.copy(alpha = 0.16f),
+                size = 38.dp
+            )
 
             Spacer(modifier = Modifier.width(14.dp))
 
@@ -326,29 +217,35 @@ private fun FeatureItemRow(
                 ) {
                     Text(
                         text = item.title,
-                        style = MaterialTheme.typography.titleSmall,
+                        style = OneUi.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
+                        color = OneUi.colors.textPrimary,
                         modifier = Modifier.weight(1f, fill = false)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = item.category.uppercase(),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 9.sp,
-                        letterSpacing = 0.5.sp,
-                        color = item.accentColor,
-                        maxLines = 1
-                    )
+                    Surface(
+                        shape = OneUi.shapes.pill,
+                        color = item.accentColor.copy(alpha = 0.12f)
+                    ) {
+                        Text(
+                            text = item.category.uppercase(),
+                            style = OneUi.typography.badge,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 9.sp,
+                            letterSpacing = 0.5.sp,
+                            color = item.accentColor,
+                            maxLines = 1,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(3.dp))
 
                 Text(
                     text = item.description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = OneUi.typography.bodySmall,
+                    color = OneUi.colors.textSecondary,
                     lineHeight = 17.sp,
                     fontSize = 12.5.sp
                 )

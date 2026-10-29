@@ -1,6 +1,8 @@
 package com.example.naughty.ui.editor
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,22 +14,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
-import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,12 +34,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.naughty.ui.components.paperBackground
+import com.example.naughty.ui.oneui.components.OneUiBottomSheet
+import com.example.naughty.ui.oneui.theme.OneUi
 import com.example.naughty.ui.theme.NoteTheme
 import com.example.naughty.ui.theme.NoteThemeRegistry
-
-import com.example.naughty.ui.theme.AmoledBlack
-import com.example.naughty.ui.theme.CrystalWhite
-import com.example.naughty.ui.theme.isAppInDarkTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,58 +46,19 @@ fun ThemeSelectionSheet(
     onSelectTheme: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val isDark = isAppInDarkTheme()
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = if (isDark) AmoledBlack else CrystalWhite,
-        contentColor = if (isDark) CrystalWhite else AmoledBlack,
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+    OneUiBottomSheet(
+        title = "Note Themes",
+        subtitle = "14 themes • Grid paper • Typography",
+        onDismiss = onDismiss
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 32.dp)
+                .padding(bottom = 24.dp)
         ) {
-            // Header
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        text = "Note Themes",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isDark) CrystalWhite else AmoledBlack
-                    )
-                    Text(
-                        text = "14 themes • Grid paper • Typography",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (isDark) Color(0xFF888888) else Color(0xFF666666)
-                    )
-                }
-
-                IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
-                    Icon(
-                        imageVector = Icons.Outlined.Close,
-                        contentDescription = "Close",
-                        tint = if (isDark) Color(0xFF888888) else Color(0xFF666666)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Grid of 14 Themes
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier
@@ -133,12 +89,19 @@ private fun ThemePreviewCard(
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
+    val selectedBorder = if (isSelected) {
+        BorderStroke(2.dp, OneUi.colors.accent)
+    } else {
+        BorderStroke(1.dp, OneUi.colors.divider)
+    }
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(OneUi.shapes.inner)
+            .border(selectedBorder, OneUi.shapes.inner)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
+        shape = OneUi.shapes.inner,
         color = theme.surface
     ) {
         Box(
@@ -201,32 +164,32 @@ private fun ThemePreviewCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "math: 42",
+                        text = "Aa 123",
                         fontFamily = theme.fontFamily,
-                        fontSize = 11.5.sp,
-                        color = theme.accent,
-                        fontWeight = FontWeight.Medium
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = theme.textPrimary
                     )
 
-                    // Accent chips
+                    // Color swatch dots
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         Box(
                             modifier = Modifier
-                                .size(9.dp)
+                                .size(8.dp)
                                 .clip(CircleShape)
                                 .background(theme.accent)
                         )
                         Box(
                             modifier = Modifier
-                                .size(9.dp)
+                                .size(8.dp)
                                 .clip(CircleShape)
-                                .background(theme.secondaryAccent)
+                                .background(theme.linkColor)
                         )
                         Box(
                             modifier = Modifier
-                                .size(9.dp)
+                                .size(8.dp)
                                 .clip(CircleShape)
-                                .background(theme.highlightColor)
+                                .background(theme.cursorColor)
                         )
                     }
                 }

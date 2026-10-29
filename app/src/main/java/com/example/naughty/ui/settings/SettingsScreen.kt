@@ -7,31 +7,19 @@ import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.outlined.StickyNote2
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.BrightnessAuto
 import androidx.compose.material.icons.outlined.CalendarMonth
@@ -42,31 +30,23 @@ import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.LightMode
-import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Restore
 import androidx.compose.material.icons.outlined.Search
-import com.example.naughty.ui.components.FeatureShowcaseSheet
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -77,24 +57,28 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.naughty.data.local.NoteMetadata
+import com.example.naughty.ui.components.FeatureShowcaseSheet
 import com.example.naughty.ui.components.hasCalendarPermission
 import com.example.naughty.ui.components.hasContactsPermission
-import com.example.naughty.ui.theme.AmoledBlack
-import com.example.naughty.ui.theme.ElectricAmber
-import com.example.naughty.ui.theme.ElectricCyan
-import com.example.naughty.ui.theme.ElectricGreen
-import com.example.naughty.ui.theme.ElectricPink
+import com.example.naughty.ui.oneui.components.OneUiBottomSheet
+import com.example.naughty.ui.oneui.components.OneUiCardGroup
+import com.example.naughty.ui.oneui.components.OneUiConfirmDialog
+import com.example.naughty.ui.oneui.components.OneUiHeaderStyle
+import com.example.naughty.ui.oneui.components.OneUiLeading
+import com.example.naughty.ui.oneui.components.OneUiListItem
+import com.example.naughty.ui.oneui.components.OneUiScaffold
+import com.example.naughty.ui.oneui.components.OneUiTextButton
+import com.example.naughty.ui.oneui.components.OneUiTrailing
+import com.example.naughty.ui.oneui.theme.OneUi
 import com.example.naughty.ui.theme.THEME_MODE_KEY
 import com.example.naughty.ui.theme.ThemeMode
 import com.example.naughty.ui.theme.ctsNotificationPreferenceFlow
-import com.example.naughty.ui.theme.isAppInDarkTheme
 import com.example.naughty.ui.theme.setCtsNotificationEnabled
 import com.example.naughty.ui.theme.themeDataStore
 import com.example.naughty.ui.theme.themePreferenceFlow
 import kotlinx.coroutines.launch
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel,
@@ -104,7 +88,6 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    val isDark = isAppInDarkTheme()
 
     val currentTheme by context.themePreferenceFlow().collectAsState(initial = ThemeMode.LIGHT)
     val isCtsNotificationEnabled by context.ctsNotificationPreferenceFlow().collectAsState(initial = true)
@@ -113,7 +96,7 @@ fun SettingsScreen(
     val deletedNotes by viewModel.deletedNotes.collectAsStateWithLifecycle()
     val deletedCount by viewModel.deletedCount.collectAsStateWithLifecycle()
 
-    var showDeletedDialog by remember { mutableStateOf(false) }
+    var showDeletedSheet by remember { mutableStateOf(false) }
     var showEmptyTrashConfirm by remember { mutableStateOf(false) }
     var showPurgeConfirm by remember { mutableStateOf(false) }
     var showClearAllConfirm by remember { mutableStateOf(false) }
@@ -166,573 +149,192 @@ fun SettingsScreen(
         packageInfo?.versionCode?.toString() ?: "20"
     }
 
-    Box(
+    OneUiScaffold(
+        title = "Settings",
+        headerStyle = OneUiHeaderStyle.Expanded,
+        onBack = onBack,
         modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .windowInsetsPadding(WindowInsets.statusBars)
-        ) {
-            // Header: Back button + "Settings" title
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(
-                    onClick = onBack,
-                    modifier = Modifier.size(44.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
-                        tint = MaterialTheme.colorScheme.onBackground
+        // Profile-Style Workspace Card (Mirrors Samsung account card)
+        item(key = "settings_workspace_profile") {
+            OneUiCardGroup {
+                item {
+                    OneUiListItem(
+                        title = "Naughty Workspace",
+                        subtitle = "$activeCount active ${if (activeCount == 1) "note" else "notes"} • $boundAppsCount app ${if (boundAppsCount == 1) "binding" else "bindings"}",
+                        leading = OneUiLeading.Avatar(initials = "N", background = OneUi.colors.accent),
+                        trailing = OneUiTrailing.None
                     )
                 }
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = "Settings",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
             }
+        }
 
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp, vertical = 12.dp)
-            ) {
-                // Workspace Summary Card
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = if (isDark) Color(0xFF0C0C0E) else Color(0xFFF4F4F6),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 16.dp),
-                        horizontalArrangement = Arrangement.SpaceAround,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Outlined.StickyNote2,
-                                    contentDescription = null,
-                                    tint = if (isDark) ElectricGreen else AmoledBlack,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "$activeCount",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isDark) ElectricGreen else AmoledBlack
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "Active Notes",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 11.sp
-                            )
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .width(1.dp)
-                                .height(32.dp)
-                                .background(if (isDark) Color(0xFF1E1E24) else Color(0xFFE4E4E7))
-                        )
-
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Link,
-                                    contentDescription = null,
-                                    tint = ElectricCyan,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "$boundAppsCount",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Bold,
-                                    color = ElectricCyan
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "Bound Apps",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 11.sp
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(28.dp))
-
-                // APPEARANCE SECTION
-                Text(
-                    text = "APPEARANCE",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    letterSpacing = 1.3.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                ThemeOptionRow(
-                    title = "Light theme",
-                    icon = Icons.Outlined.LightMode,
-                    selected = currentTheme == ThemeMode.LIGHT,
-                    onClick = {
-                        coroutineScope.launch {
-                            context.themeDataStore.edit { it[THEME_MODE_KEY] = ThemeMode.LIGHT.name }
-                        }
-                    }
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                ThemeOptionRow(
-                    title = "Dark theme",
-                    icon = Icons.Outlined.DarkMode,
-                    selected = currentTheme == ThemeMode.DARK,
-                    onClick = {
-                        coroutineScope.launch {
-                            context.themeDataStore.edit { it[THEME_MODE_KEY] = ThemeMode.DARK.name }
-                        }
-                    }
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                ThemeOptionRow(
-                    title = "Follow system",
-                    icon = Icons.Outlined.BrightnessAuto,
-                    selected = currentTheme == ThemeMode.AUTO,
-                    onClick = {
-                        coroutineScope.launch {
-                            context.themeDataStore.edit { it[THEME_MODE_KEY] = ThemeMode.AUTO.name }
-                        }
-                    }
-                )
-
-                Spacer(modifier = Modifier.height(28.dp))
-
-                // CIRCLE TO SEARCH SECTION
-                Text(
-                    text = "CIRCLE TO SEARCH",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    letterSpacing = 1.3.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable {
+        // Appearance Group
+        item(key = "settings_appearance_group") {
+            OneUiCardGroup(label = "Appearance") {
+                item {
+                    OneUiListItem(
+                        title = "Light theme",
+                        leading = OneUiLeading.RawIcon(Icons.Outlined.LightMode, tint = OneUi.colors.textPrimary),
+                        trailing = if (currentTheme == ThemeMode.LIGHT) OneUiTrailing.Checkmark else OneUiTrailing.None,
+                        onClick = {
                             coroutineScope.launch {
-                                context.setCtsNotificationEnabled(!isCtsNotificationEnabled)
+                                context.themeDataStore.edit { it[THEME_MODE_KEY] = ThemeMode.LIGHT.name }
                             }
                         }
-                        .padding(vertical = 8.dp, horizontal = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Search,
-                        contentDescription = null,
-                        tint = if (isDark) ElectricCyan else Color(0xFF007799),
-                        modifier = Modifier.size(22.dp)
                     )
-                    Spacer(modifier = Modifier.width(14.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Capture notes notification",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "Prompt to save snippets after exiting Circle to Search",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 11.sp
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Switch(
-                        checked = isCtsNotificationEnabled,
-                        onCheckedChange = { enabled ->
+                }
+                item {
+                    OneUiListItem(
+                        title = "Dark theme",
+                        leading = OneUiLeading.RawIcon(Icons.Outlined.DarkMode, tint = OneUi.colors.textPrimary),
+                        trailing = if (currentTheme == ThemeMode.DARK) OneUiTrailing.Checkmark else OneUiTrailing.None,
+                        onClick = {
                             coroutineScope.launch {
-                                context.setCtsNotificationEnabled(enabled)
+                                context.themeDataStore.edit { it[THEME_MODE_KEY] = ThemeMode.DARK.name }
                             }
-                        },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = AmoledBlack,
-                            checkedTrackColor = ElectricGreen
+                        }
+                    )
+                }
+                item {
+                    OneUiListItem(
+                        title = "Follow system",
+                        leading = OneUiLeading.RawIcon(Icons.Outlined.BrightnessAuto, tint = OneUi.colors.textPrimary),
+                        trailing = if (currentTheme == ThemeMode.AUTO) OneUiTrailing.Checkmark else OneUiTrailing.None,
+                        onClick = {
+                            coroutineScope.launch {
+                                context.themeDataStore.edit { it[THEME_MODE_KEY] = ThemeMode.AUTO.name }
+                            }
+                        }
+                    )
+                }
+            }
+        }
+
+        // Circle to Search Group
+        item(key = "settings_cts_group") {
+            OneUiCardGroup(label = "Circle to Search") {
+                item {
+                    OneUiListItem(
+                        title = "Capture notes notification",
+                        subtitle = "Prompt to save snippets after exiting Circle to Search",
+                        leading = OneUiLeading.IconBadge(Icons.Outlined.Search, OneUi.colors.badge.blue),
+                        trailing = OneUiTrailing.Switch(
+                            checked = isCtsNotificationEnabled,
+                            onCheckedChange = { enabled ->
+                                coroutineScope.launch {
+                                    context.setCtsNotificationEnabled(enabled)
+                                }
+                            }
                         )
                     )
                 }
+            }
+        }
 
-                Spacer(modifier = Modifier.height(28.dp))
-
-                // PERMISSIONS & INTEGRATIONS SECTION
-                Text(
-                    text = "PERMISSIONS & INTEGRATIONS",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    letterSpacing = 1.3.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Contacts Permission Row
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable {
+        // Permissions & Integrations Group
+        item(key = "settings_permissions_group") {
+            OneUiCardGroup(label = "Permissions & Integrations") {
+                item {
+                    OneUiListItem(
+                        title = "Contacts access",
+                        subtitle = if (hasContacts) "Granted • Reference contacts with @mention" else "Denied • Tap to allow @contact references",
+                        subtitleColor = if (hasContacts) OneUi.colors.textSecondary else OneUi.colors.warning,
+                        leading = OneUiLeading.IconBadge(Icons.Outlined.Person, OneUi.colors.badge.green),
+                        trailing = OneUiTrailing.CountBadge(
+                            text = if (hasContacts) "Granted" else "Grant",
+                            isHighlight = !hasContacts
+                        ),
+                        onClick = {
                             if (hasContacts) {
                                 permissionToRevoke = "Contacts"
                             } else {
                                 contactsLauncher.launch(Manifest.permission.READ_CONTACTS)
                             }
                         }
-                        .padding(vertical = 10.dp, horizontal = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Person,
-                        contentDescription = null,
-                        tint = if (isDark) ElectricGreen else Color(0xFF1B5E20),
-                        modifier = Modifier.size(22.dp)
                     )
-                    Spacer(modifier = Modifier.width(14.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Contacts access",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = if (hasContacts) "Granted • Reference contacts with @mention" else "Denied • Tap to allow @contact references",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (hasContacts) MaterialTheme.colorScheme.onSurfaceVariant else ElectricAmber,
-                            fontSize = 11.sp
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = if (hasContacts) {
-                            if (isDark) ElectricGreen.copy(alpha = 0.16f) else Color(0xFFE8F5E9)
-                        } else {
-                            if (isDark) ElectricAmber.copy(alpha = 0.16f) else Color(0xFFFFF3E0)
-                        },
-                        modifier = Modifier.clip(RoundedCornerShape(8.dp))
-                    ) {
-                        Text(
-                            text = if (hasContacts) "Granted" else "Grant",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = if (hasContacts) {
-                                if (isDark) ElectricGreen else Color(0xFF2E7D32)
-                            } else {
-                                if (isDark) ElectricAmber else Color(0xFFE65100)
-                            },
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                        )
-                    }
                 }
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                // Calendar Permission Row
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable {
+                item {
+                    OneUiListItem(
+                        title = "Calendar access",
+                        subtitle = if (hasCalendar) "Granted • Reference events with @mention" else "Denied • Tap to allow @calendar references",
+                        subtitleColor = if (hasCalendar) OneUi.colors.textSecondary else OneUi.colors.warning,
+                        leading = OneUiLeading.IconBadge(Icons.Outlined.CalendarMonth, OneUi.colors.badge.orange),
+                        trailing = OneUiTrailing.CountBadge(
+                            text = if (hasCalendar) "Granted" else "Grant",
+                            isHighlight = !hasCalendar
+                        ),
+                        onClick = {
                             if (hasCalendar) {
                                 permissionToRevoke = "Calendar"
                             } else {
                                 calendarLauncher.launch(Manifest.permission.READ_CALENDAR)
                             }
                         }
-                        .padding(vertical = 10.dp, horizontal = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.CalendarMonth,
-                        contentDescription = null,
-                        tint = ElectricAmber,
-                        modifier = Modifier.size(22.dp)
                     )
-                    Spacer(modifier = Modifier.width(14.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Calendar access",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = if (hasCalendar) "Granted • Reference events with @mention" else "Denied • Tap to allow @calendar references",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (hasCalendar) MaterialTheme.colorScheme.onSurfaceVariant else ElectricAmber,
-                            fontSize = 11.sp
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = if (hasCalendar) {
-                            if (isDark) ElectricGreen.copy(alpha = 0.16f) else Color(0xFFE8F5E9)
-                        } else {
-                            if (isDark) ElectricAmber.copy(alpha = 0.16f) else Color(0xFFFFF3E0)
-                        },
-                        modifier = Modifier.clip(RoundedCornerShape(8.dp))
-                    ) {
-                        Text(
-                            text = if (hasCalendar) "Granted" else "Grant",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = if (hasCalendar) {
-                                if (isDark) ElectricGreen else Color(0xFF2E7D32)
-                            } else {
-                                if (isDark) ElectricAmber else Color(0xFFE65100)
-                            },
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                        )
-                    }
                 }
+            }
+        }
 
-                Spacer(modifier = Modifier.height(28.dp))
-
-                // NOTES & STORAGE SECTION
-                Text(
-                    text = "NOTES & STORAGE",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    letterSpacing = 1.3.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Deleted Notes (Trash)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable { showDeletedDialog = true }
-                        .padding(vertical = 12.dp, horizontal = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Delete,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(22.dp)
+        // Notes & Storage Group
+        item(key = "settings_storage_group") {
+            OneUiCardGroup(label = "Notes & Storage") {
+                item {
+                    OneUiListItem(
+                        title = "Deleted notes",
+                        subtitle = "Trash • View, restore or permanently delete",
+                        leading = OneUiLeading.IconBadge(Icons.Outlined.Delete, OneUi.colors.badge.gray),
+                        trailing = if (deletedCount > 0) OneUiTrailing.CountBadge("$deletedCount", isHighlight = true) else OneUiTrailing.Chevron,
+                        onClick = { showDeletedSheet = true }
                     )
-                    Spacer(modifier = Modifier.width(14.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Deleted notes",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "Trash • View, restore or permanently delete",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 11.sp
-                        )
-                    }
-                    if (deletedCount > 0) {
-                        Surface(
-                            shape = RoundedCornerShape(999.dp),
-                            color = ElectricPink.copy(alpha = 0.15f)
-                        ) {
-                            Text(
-                                text = "$deletedCount",
-                                style = MaterialTheme.typography.labelSmall,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                                color = ElectricPink,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
                 }
-
-                // Clean up deleted & blank notes
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable { showPurgeConfirm = true }
-                        .padding(vertical = 12.dp, horizontal = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.DeleteForever,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(22.dp)
+                item {
+                    OneUiListItem(
+                        title = "Clean up deleted & blank notes",
+                        subtitle = "Purge soft-deleted trash and empty drafts from database",
+                        leading = OneUiLeading.IconBadge(Icons.Outlined.DeleteForever, OneUi.colors.badge.gray),
+                        trailing = OneUiTrailing.Chevron,
+                        onClick = { showPurgeConfirm = true }
                     )
-                    Spacer(modifier = Modifier.width(14.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Clean up deleted & blank notes",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "Purge soft-deleted trash and empty drafts from database",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 11.sp
-                        )
-                    }
                 }
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                // Clear all active notes
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable { showClearAllConfirm = true }
-                        .padding(vertical = 12.dp, horizontal = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.DeleteSweep,
-                        contentDescription = null,
-                        tint = ElectricPink,
-                        modifier = Modifier.size(22.dp)
+                item {
+                    OneUiListItem(
+                        title = "Clear all active notes",
+                        subtitle = "Delete all active notes from workspace",
+                        titleColor = OneUi.colors.destructive,
+                        leading = OneUiLeading.IconBadge(Icons.Outlined.DeleteSweep, OneUi.colors.destructive),
+                        onClick = { showClearAllConfirm = true }
                     )
-                    Spacer(modifier = Modifier.width(14.dp))
-                    Column {
-                        Text(
-                            text = "Clear all active notes",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = ElectricPink
-                        )
-                        Text(
-                            text = "Delete all active notes from workspace",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 11.sp
-                        )
-                    }
                 }
+            }
+        }
 
-                Spacer(modifier = Modifier.height(28.dp))
-
-                // ABOUT SECTION
-                Text(
-                    text = "ABOUT",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    letterSpacing = 1.3.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable { showFeatureShowcaseSheet = true }
-                        .padding(vertical = 12.dp, horizontal = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.AutoAwesome,
-                        contentDescription = "Feature Showcase",
-                        tint = if (isDark) ElectricGreen else MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(22.dp)
+        // About Group
+        item(key = "settings_about_group") {
+            OneUiCardGroup(label = "About") {
+                item {
+                    OneUiListItem(
+                        title = "Feature Showcase & Key Highlights",
+                        subtitle = "Explore all key offline & context features",
+                        leading = OneUiLeading.IconBadge(Icons.Outlined.AutoAwesome, OneUi.colors.badge.purple),
+                        trailing = OneUiTrailing.Chevron,
+                        onClick = { showFeatureShowcaseSheet = true }
                     )
-                    Spacer(modifier = Modifier.width(14.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Feature Showcase & Key Highlights",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "Explore all key offline & context features",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 11.sp
-                        )
-                    }
                 }
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable { showAboutDialog = true }
-                        .padding(vertical = 12.dp, horizontal = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Info,
-                        contentDescription = "About & Privacy",
-                        tint = if (isDark) ElectricGreen else MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(22.dp)
+                item {
+                    OneUiListItem(
+                        title = "About Naughty",
+                        subtitle = "v$versionName (Build $versionCode) • 100% Offline",
+                        leading = OneUiLeading.IconBadge(Icons.Outlined.Info, OneUi.colors.badge.teal),
+                        trailing = OneUiTrailing.Chevron,
+                        onClick = { showAboutDialog = true }
                     )
-                    Spacer(modifier = Modifier.width(14.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Naughty v$versionName • Build $versionCode",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "100% Offline • Architecture & Permissions",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 11.sp
-                        )
-                    }
                 }
-
-                Spacer(modifier = Modifier.height(32.dp))
             }
         }
     }
 
+    // Feature Showcase Sheet
     if (showFeatureShowcaseSheet) {
         FeatureShowcaseSheet(
             versionName = versionName,
@@ -742,6 +344,7 @@ fun SettingsScreen(
         )
     }
 
+    // About & Privacy Sheet
     if (showAboutDialog) {
         AboutAndPrivacyDialog(
             versionName = versionName,
@@ -750,269 +353,158 @@ fun SettingsScreen(
         )
     }
 
-    if (showDeletedDialog) {
-        AlertDialog(
-            onDismissRequest = { showDeletedDialog = false },
-            title = {
+    // Deleted Notes (Trash) Bottom Sheet
+    if (showDeletedSheet) {
+        OneUiBottomSheet(
+            title = "Deleted Notes (${deletedNotes.size})",
+            subtitle = if (deletedNotes.isNotEmpty()) "Tap a note to view, restore, or delete permanently" else "Trash is empty",
+            onDismissRequest = { showDeletedSheet = false }
+        ) {
+            if (deletedNotes.isNotEmpty()) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    OneUiTextButton(
+                        text = "Empty Trash",
+                        color = OneUi.colors.destructive,
+                        onClick = { showEmptyTrashConfirm = true }
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                OneUiCardGroup {
+                    deletedNotes.forEach { note ->
+                        item(key = note.id) {
+                            OneUiListItem(
+                                title = note.title.ifBlank { "Untitled" },
+                                subtitle = "In trash • Tap to view",
+                                leading = OneUiLeading.RawIcon(Icons.Outlined.DeleteOutline, tint = OneUi.colors.textSecondary),
+                                trailing = OneUiTrailing.Custom {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        IconButton(
+                                            onClick = { viewModel.restoreNote(note.id) },
+                                            modifier = Modifier.size(36.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.Restore,
+                                                contentDescription = "Restore",
+                                                tint = OneUi.colors.accent,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                        IconButton(
+                                            onClick = { noteToPermanentlyDelete = note },
+                                            modifier = Modifier.size(36.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.DeleteForever,
+                                                contentDescription = "Permanently delete",
+                                                tint = OneUi.colors.destructive,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    }
+                                },
+                                onClick = {
+                                    showDeletedSheet = false
+                                    onNoteClick(note.id)
+                                }
+                            )
+                        }
+                    }
+                }
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 32.dp),
+                    contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Deleted Notes (${deletedNotes.size})",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        text = "Trash is empty",
+                        style = OneUi.type.cardBody,
+                        color = OneUi.colors.textSecondary
                     )
-                    if (deletedNotes.isNotEmpty()) {
-                        TextButton(
-                            onClick = { showEmptyTrashConfirm = true },
-                            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                        ) {
-                            Text("Empty Trash", fontSize = 12.sp)
-                        }
-                    }
-                }
-            },
-            text = {
-                if (deletedNotes.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 24.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "Trash is empty",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 380.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(deletedNotes, key = { it.id }) { note ->
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        showDeletedDialog = false
-                                        onNoteClick(note.id)
-                                    }
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = note.title.ifBlank { "Untitled" },
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.SemiBold,
-                                            maxLines = 1
-                                        )
-                                        Text(
-                                            text = "In trash • Tap to view",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            fontSize = 11.sp,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                    IconButton(
-                                        onClick = { viewModel.restoreNote(note.id) },
-                                        modifier = Modifier.size(32.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.Restore,
-                                            contentDescription = "Restore",
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    }
-                                    IconButton(
-                                        onClick = { noteToPermanentlyDelete = note },
-                                        modifier = Modifier.size(32.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.DeleteForever,
-                                            contentDescription = "Permanently Delete",
-                                            tint = MaterialTheme.colorScheme.error,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showDeletedDialog = false }) {
-                    Text("Close")
                 }
             }
+        }
+    }
+
+    // Confirmation Dialogs
+    if (showEmptyTrashConfirm) {
+        OneUiConfirmDialog(
+            title = "Empty Trash?",
+            message = "All deleted notes will be permanently destroyed. This action cannot be undone.",
+            confirmLabel = "Empty Trash",
+            destructive = true,
+            onConfirm = {
+                showEmptyTrashConfirm = false
+                viewModel.emptyTrash()
+            },
+            onDismiss = { showEmptyTrashConfirm = false }
         )
     }
 
-    if (showEmptyTrashConfirm) {
-        AlertDialog(
-            onDismissRequest = { showEmptyTrashConfirm = false },
-            title = { Text("Empty Trash?") },
-            text = { Text("All deleted notes will be permanently destroyed. This action cannot be undone.") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showEmptyTrashConfirm = false
-                        viewModel.emptyTrash()
-                    },
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Text("Empty Trash")
-                }
+    if (showPurgeConfirm) {
+        OneUiConfirmDialog(
+            title = "Clean Up Notes?",
+            message = "Purge soft-deleted trash and blank notes from your database to optimize storage.",
+            confirmLabel = "Clean Up",
+            destructive = false,
+            onConfirm = {
+                showPurgeConfirm = false
+                viewModel.purgeDeletedAndBlankNotes()
             },
-            dismissButton = {
-                TextButton(onClick = { showEmptyTrashConfirm = false }) {
-                    Text("Cancel")
-                }
-            }
+            onDismiss = { showPurgeConfirm = false }
+        )
+    }
+
+    if (showClearAllConfirm) {
+        OneUiConfirmDialog(
+            title = "Clear All Active Notes?",
+            message = "All active notes will be moved to Trash. You can restore them anytime.",
+            confirmLabel = "Clear All",
+            destructive = true,
+            onConfirm = {
+                showClearAllConfirm = false
+                viewModel.clearAllNotes()
+            },
+            onDismiss = { showClearAllConfirm = false }
         )
     }
 
     if (noteToPermanentlyDelete != null) {
         val target = noteToPermanentlyDelete!!
-        AlertDialog(
-            onDismissRequest = { noteToPermanentlyDelete = null },
-            title = { Text("Permanently delete note?") },
-            text = {
-                val title = target.title.trim()
-                if (title.isNotBlank()) {
-                    Text("Are you sure you want to permanently delete \"$title\"? This action cannot be undone.")
-                } else {
-                    Text("Are you sure you want to permanently delete this note? This action cannot be undone.")
-                }
+        OneUiConfirmDialog(
+            title = "Permanently Delete?",
+            message = "Delete \"${target.title.trim().ifBlank { "this note" }}\" permanently? This action cannot be undone.",
+            confirmLabel = "Delete",
+            destructive = true,
+            onConfirm = {
+                viewModel.permanentlyDeleteNote(target.id)
+                noteToPermanentlyDelete = null
             },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.permanentlyDeleteNote(target.id)
-                        noteToPermanentlyDelete = null
-                    },
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Text("Delete Forever")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { noteToPermanentlyDelete = null }) {
-                    Text("Cancel")
-                }
-            }
-        )
-    }
-
-    if (showClearAllConfirm) {
-        AlertDialog(
-            onDismissRequest = { showClearAllConfirm = false },
-            title = { Text("Clear all active notes?") },
-            text = { Text("This will permanently delete all notes and checklists. This action cannot be undone.") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showClearAllConfirm = false
-                        viewModel.clearAllNotes()
-                    },
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Text("Clear All")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showClearAllConfirm = false }) {
-                    Text("Cancel")
-                }
-            }
-        )
-    }
-
-    if (showPurgeConfirm) {
-        AlertDialog(
-            onDismissRequest = { showPurgeConfirm = false },
-            title = { Text("Clean up database?", fontWeight = FontWeight.Bold) },
-            text = {
-                Text("This will permanently purge all soft-deleted trash notes and empty blank drafts from the database. This action cannot be undone.")
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showPurgeConfirm = false
-                        viewModel.purgeDeletedAndBlankNotes { count ->
-                            android.widget.Toast.makeText(
-                                context,
-                                if (count > 0) "Cleaned up $count deleted & blank notes" else "Database is clean (0 deleted/blank notes)",
-                                android.widget.Toast.LENGTH_SHORT
-                            ).show()
-                        }
-                    },
-                    colors = ButtonDefaults.textButtonColors(contentColor = ElectricPink)
-                ) {
-                    Text("Clean Up", fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showPurgeConfirm = false }) {
-                    Text("Cancel")
-                }
-            }
+            onDismiss = { noteToPermanentlyDelete = null }
         )
     }
 
     if (permissionToRevoke != null) {
-        val permName = permissionToRevoke!!
-        AlertDialog(
-            onDismissRequest = { permissionToRevoke = null },
-            title = {
-                Text(
-                    text = "Manage $permName Permission",
-                    fontWeight = FontWeight.Bold
-                )
-            },
-            text = {
-                Text(
-                    text = "$permName access is currently granted to Naughty. To revoke this permission, Android requires changing it in the App Info settings.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                            data = Uri.fromParts("package", context.packageName, null)
-                        }
-                        context.startActivity(intent)
-                        permissionToRevoke = null
-                    }
-                ) {
-                    Text(
-                        "Open App Settings",
-                        color = if (isDark) ElectricCyan else MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold
-                    )
+        val perm = permissionToRevoke!!
+        OneUiConfirmDialog(
+            title = "Revoke $perm Access?",
+            message = "$perm permission is currently granted. To revoke it, open Android App Settings and toggle permissions.",
+            confirmLabel = "Open App Settings",
+            destructive = false,
+            onConfirm = {
+                permissionToRevoke = null
+                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.fromParts("package", context.packageName, null)
                 }
+                context.startActivity(intent)
             },
-            dismissButton = {
-                TextButton(onClick = { permissionToRevoke = null }) {
-                    Text("Cancel")
-                }
-            }
+            onDismiss = { permissionToRevoke = null }
         )
     }
 }

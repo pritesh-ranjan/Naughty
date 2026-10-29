@@ -17,7 +17,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AllInclusive
@@ -30,7 +29,6 @@ import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.LooksOne
 import androidx.compose.material.icons.outlined.Remove
-import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -38,40 +36,31 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.naughty.data.local.BindingType
-import com.example.naughty.ui.theme.AmoledBlack
-import com.example.naughty.ui.theme.CrystalWhite
-import com.example.naughty.ui.theme.ElectricAmber
-import com.example.naughty.ui.theme.ElectricCyan
-import com.example.naughty.ui.theme.ElectricGreen
-import com.example.naughty.ui.theme.ElectricPink
-import com.example.naughty.ui.theme.isAppInDarkTheme
+import com.example.naughty.ui.oneui.components.OneUiBottomSheet
+import com.example.naughty.ui.oneui.components.OneUiTextField
+import com.example.naughty.ui.oneui.theme.OneUi
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -81,15 +70,12 @@ fun BindingSheet(
     onDismiss: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val context = LocalContext.current
-    val isDark = isAppInDarkTheme()
 
     LaunchedEffect(noteId) {
         viewModel.loadForNote(noteId)
     }
 
-    // Android DatePickerDialog setup
     val calendar = Calendar.getInstance()
     if (uiState.selectedDateMillis != null) {
         calendar.timeInMillis = uiState.selectedDateMillis!!
@@ -98,78 +84,56 @@ fun BindingSheet(
         DatePickerDialog(
             context,
             { _, year, month, dayOfMonth ->
-                val selectedCal = Calendar.getInstance().apply {
-                    set(year, month, dayOfMonth, 23, 59, 59)
+                val cal = Calendar.getInstance().apply {
+                    set(Calendar.YEAR, year)
+                    set(Calendar.MONTH, month)
+                    set(Calendar.DAY_OF_MONTH, dayOfMonth)
+                    set(Calendar.HOUR_OF_DAY, 23)
+                    set(Calendar.MINUTE, 59)
+                    set(Calendar.SECOND, 59)
                 }
-                viewModel.setSelectedDate(selectedCal.timeInMillis)
+                viewModel.setSelectedDate(cal.timeInMillis)
             },
             calendar.get(Calendar.YEAR),
             calendar.get(Calendar.MONTH),
             calendar.get(Calendar.DAY_OF_MONTH)
-        ).apply {
-            datePicker.minDate = System.currentTimeMillis()
+        ).also {
+            it.datePicker.minDate = System.currentTimeMillis()
         }
     }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = if (isDark) AmoledBlack else CrystalWhite
+    OneUiBottomSheet(
+        title = "App Context Binding",
+        subtitle = "Surface note when launching selected app",
+        onDismiss = onDismiss
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Outlined.Link,
-                    contentDescription = null,
-                    tint = ElectricCyan,
-                    modifier = Modifier.size(22.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "App Context Binding",
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                    color = if (isDark) CrystalWhite else AmoledBlack
-                )
-            }
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Surface this note when you open a specific application",
-                style = MaterialTheme.typography.bodySmall,
-                color = if (isDark) Color(0xFF888888) else Color(0xFF666666)
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Binding mode selector dropdown [ Always active | For a set duration | Until a specific date | One-shot ]
-            Column(
-                modifier = Modifier.fillMaxWidth()
-            ) {
+            // Binding mode selector dropdown
+            Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
                     text = "UNTIL WHEN TO BIND",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        letterSpacing = 1.2.sp,
-                        fontWeight = FontWeight.Bold
-                    ),
-                    color = if (isDark) ElectricGreen else AmoledBlack
+                    style = OneUi.typography.caption,
+                    letterSpacing = 1.2.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = OneUi.colors.textSecondary
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Option Selector: Dropdown for [ Always active | For a set duration | Until a specific date | One-shot ]
                 var showExpirationDropdown by remember { mutableStateOf(false) }
 
                 Box(modifier = Modifier.fillMaxWidth()) {
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
+                            .clip(OneUi.shapes.inner)
                             .clickable { showExpirationDropdown = true },
-                        shape = RoundedCornerShape(14.dp),
-                        color = if (isDark) Color(0xFF0C0C0E) else Color(0xFFF4F4F6)
+                        shape = OneUi.shapes.inner,
+                        color = OneUi.colors.surfaceElevated
                     ) {
                         Row(
                             modifier = Modifier
@@ -187,15 +151,15 @@ fun BindingSheet(
                                         BindingModeOption.ONE_SHOT -> Icons.Outlined.LooksOne
                                     },
                                     contentDescription = null,
-                                    tint = ElectricCyan,
+                                    tint = OneUi.colors.accent,
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Column {
                                     Text(
                                         text = "Binding mode",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = if (isDark) Color(0xFF777777) else Color(0xFF888888)
+                                        style = OneUi.typography.caption,
+                                        color = OneUi.colors.textSecondary
                                     )
                                     Text(
                                         text = when (uiState.currentMode) {
@@ -204,8 +168,9 @@ fun BindingSheet(
                                             BindingModeOption.DATE_PICKER -> "Until a specific date"
                                             BindingModeOption.ONE_SHOT -> "One-shot (fires once)"
                                         },
-                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                                        color = if (isDark) CrystalWhite else AmoledBlack
+                                        style = OneUi.typography.body,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = OneUi.colors.textPrimary
                                     )
                                 }
                             }
@@ -213,7 +178,7 @@ fun BindingSheet(
                             Icon(
                                 imageVector = Icons.Outlined.ArrowDropDown,
                                 contentDescription = "Change",
-                                tint = if (isDark) Color(0xFF888888) else Color(0xFF666666),
+                                tint = OneUi.colors.textSecondary,
                                 modifier = Modifier.size(24.dp)
                             )
                         }
@@ -222,38 +187,13 @@ fun BindingSheet(
                     DropdownMenu(
                         expanded = showExpirationDropdown,
                         onDismissRequest = { showExpirationDropdown = false },
-                        modifier = Modifier
-                            .fillMaxWidth(0.85f)
-                            .background(if (isDark) AmoledBlack else CrystalWhite)
+                        shape = OneUi.shapes.menu,
+                        containerColor = OneUi.colors.surfaceElevated
                     ) {
                         DropdownMenuItem(
-                            text = {
-                                Column {
-                                    Text("Always active", fontWeight = FontWeight.SemiBold)
-                                    Text(
-                                        "Binding never expires • Show every time",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            },
+                            text = { Text("Always active", color = OneUi.colors.textPrimary) },
                             leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Outlined.AllInclusive,
-                                    contentDescription = null,
-                                    tint = if (uiState.currentMode == BindingModeOption.ALWAYS_ACTIVE) ElectricCyan else (if (isDark) Color(0xFF777777) else Color(0xFF888888)),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            },
-                            trailingIcon = {
-                                if (uiState.currentMode == BindingModeOption.ALWAYS_ACTIVE) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.Check,
-                                        contentDescription = null,
-                                        tint = ElectricGreen,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
+                                Icon(Icons.Outlined.AllInclusive, null, tint = OneUi.colors.accent, modifier = Modifier.size(20.dp))
                             },
                             onClick = {
                                 viewModel.setBindingMode(BindingModeOption.ALWAYS_ACTIVE)
@@ -261,33 +201,9 @@ fun BindingSheet(
                             }
                         )
                         DropdownMenuItem(
-                            text = {
-                                Column {
-                                    Text("For a set duration", fontWeight = FontWeight.SemiBold)
-                                    Text(
-                                        "Set days, weeks, or months",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = if (isDark) Color(0xFF777777) else Color(0xFF888888)
-                                    )
-                                }
-                            },
+                            text = { Text("For a set duration", color = OneUi.colors.textPrimary) },
                             leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Outlined.Timer,
-                                    contentDescription = null,
-                                    tint = if (uiState.currentMode == BindingModeOption.DURATION) ElectricCyan else (if (isDark) Color(0xFF777777) else Color(0xFF888888)),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            },
-                            trailingIcon = {
-                                if (uiState.currentMode == BindingModeOption.DURATION) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.Check,
-                                        contentDescription = null,
-                                        tint = ElectricGreen,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
+                                Icon(Icons.Outlined.Timer, null, tint = OneUi.colors.accent, modifier = Modifier.size(20.dp))
                             },
                             onClick = {
                                 viewModel.setBindingMode(BindingModeOption.DURATION)
@@ -295,67 +211,20 @@ fun BindingSheet(
                             }
                         )
                         DropdownMenuItem(
-                            text = {
-                                Column {
-                                    Text("Until a specific date", fontWeight = FontWeight.SemiBold)
-                                    Text(
-                                        "Choose a specific end date",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = if (isDark) Color(0xFF777777) else Color(0xFF888888)
-                                    )
-                                }
-                            },
+                            text = { Text("Until a specific date", color = OneUi.colors.textPrimary) },
                             leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Outlined.CalendarMonth,
-                                    contentDescription = null,
-                                    tint = if (uiState.currentMode == BindingModeOption.DATE_PICKER) ElectricCyan else (if (isDark) Color(0xFF777777) else Color(0xFF888888)),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            },
-                            trailingIcon = {
-                                if (uiState.currentMode == BindingModeOption.DATE_PICKER) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.Check,
-                                        contentDescription = null,
-                                        tint = ElectricGreen,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
+                                Icon(Icons.Outlined.CalendarMonth, null, tint = OneUi.colors.accent, modifier = Modifier.size(20.dp))
                             },
                             onClick = {
                                 viewModel.setBindingMode(BindingModeOption.DATE_PICKER)
                                 showExpirationDropdown = false
+                                datePickerDialog.show()
                             }
                         )
                         DropdownMenuItem(
-                            text = {
-                                Column {
-                                    Text("One-shot", fontWeight = FontWeight.SemiBold)
-                                    Text(
-                                        "Fires once on next open, then expires",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = if (isDark) Color(0xFF777777) else Color(0xFF888888)
-                                    )
-                                }
-                            },
+                            text = { Text("One-shot (fires once)", color = OneUi.colors.textPrimary) },
                             leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Outlined.LooksOne,
-                                    contentDescription = null,
-                                    tint = if (uiState.currentMode == BindingModeOption.ONE_SHOT) ElectricCyan else (if (isDark) Color(0xFF777777) else Color(0xFF888888)),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            },
-                            trailingIcon = {
-                                if (uiState.currentMode == BindingModeOption.ONE_SHOT) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.Check,
-                                        contentDescription = null,
-                                        tint = ElectricGreen,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
+                                Icon(Icons.Outlined.LooksOne, null, tint = OneUi.colors.accent, modifier = Modifier.size(20.dp))
                             },
                             onClick = {
                                 viewModel.setBindingMode(BindingModeOption.ONE_SHOT)
@@ -365,14 +234,14 @@ fun BindingSheet(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
-                // Duration Controls (Number of days/weeks/months)
+                // Duration Controls
                 if (uiState.currentMode == BindingModeOption.DURATION) {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp),
-                        color = if (isDark) Color(0xFF0C0C0E) else Color(0xFFF4F4F6)
+                        shape = OneUi.shapes.inner,
+                        color = OneUi.colors.surfaceElevated
                     ) {
                         Column(modifier = Modifier.padding(14.dp)) {
                             Row(
@@ -382,11 +251,10 @@ fun BindingSheet(
                             ) {
                                 Text(
                                     text = "Duration amount:",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = if (isDark) CrystalWhite else AmoledBlack
+                                    style = OneUi.typography.body,
+                                    color = OneUi.colors.textPrimary
                                 )
 
-                                // Stepper [-] [ count ] [+]
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -395,7 +263,7 @@ fun BindingSheet(
                                         modifier = Modifier
                                             .size(32.dp)
                                             .clip(CircleShape)
-                                            .background(if (isDark) Color(0xFF18181B) else Color(0xFFE4E4E7))
+                                            .background(OneUi.colors.divider)
                                             .clickable {
                                                 if (uiState.durationNumber > 1) {
                                                     viewModel.setDurationNumber(uiState.durationNumber - 1)
@@ -407,14 +275,15 @@ fun BindingSheet(
                                             imageVector = Icons.Outlined.Remove,
                                             contentDescription = "Decrease",
                                             modifier = Modifier.size(16.dp),
-                                            tint = if (isDark) CrystalWhite else AmoledBlack
+                                            tint = OneUi.colors.textPrimary
                                         )
                                     }
 
                                     Text(
                                         text = "${uiState.durationNumber}",
-                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                        color = if (isDark) CrystalWhite else AmoledBlack,
+                                        style = OneUi.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = OneUi.colors.textPrimary,
                                         modifier = Modifier.padding(horizontal = 4.dp)
                                     )
 
@@ -422,7 +291,7 @@ fun BindingSheet(
                                         modifier = Modifier
                                             .size(32.dp)
                                             .clip(CircleShape)
-                                            .background(if (isDark) Color(0xFF18181B) else Color(0xFFE4E4E7))
+                                            .background(OneUi.colors.divider)
                                             .clickable {
                                                 viewModel.setDurationNumber(uiState.durationNumber + 1)
                                             },
@@ -432,7 +301,7 @@ fun BindingSheet(
                                             imageVector = Icons.Outlined.Add,
                                             contentDescription = "Increase",
                                             modifier = Modifier.size(16.dp),
-                                            tint = if (isDark) CrystalWhite else AmoledBlack
+                                            tint = OneUi.colors.textPrimary
                                         )
                                     }
                                 }
@@ -440,7 +309,6 @@ fun BindingSheet(
 
                             Spacer(modifier = Modifier.height(10.dp))
 
-                            // Unit selector [ Days | Weeks | Months ]
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -450,10 +318,10 @@ fun BindingSheet(
                                     Box(
                                         modifier = Modifier
                                             .weight(1f)
-                                            .clip(RoundedCornerShape(8.dp))
+                                            .clip(OneUi.shapes.pill)
                                             .background(
-                                                if (isUnitSelected) (if (isDark) ElectricGreen else AmoledBlack)
-                                                else (if (isDark) Color(0xFF141416) else Color(0xFFE8E8EC))
+                                                if (isUnitSelected) OneUi.colors.accent
+                                                else OneUi.colors.divider
                                             )
                                             .clickable { viewModel.setDurationUnit(unit) }
                                             .padding(vertical = 6.dp),
@@ -461,9 +329,9 @@ fun BindingSheet(
                                     ) {
                                         Text(
                                             text = unit.label,
-                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                                            color = if (isUnitSelected) (if (isDark) AmoledBlack else CrystalWhite)
-                                            else (if (isDark) CrystalWhite else AmoledBlack)
+                                            style = OneUi.typography.caption,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = if (isUnitSelected) OneUi.colors.onAccent else OneUi.colors.textPrimary
                                         )
                                     }
                                 }
@@ -474,8 +342,8 @@ fun BindingSheet(
                             val expDate = calculateDurationDate(uiState.durationNumber, uiState.durationUnit)
                             Text(
                                 text = "Expires in ${uiState.durationNumber} ${uiState.durationUnit.label.lowercase()} • $expDate",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = ElectricCyan,
+                                style = OneUi.typography.caption,
+                                color = OneUi.colors.accent,
                                 fontWeight = FontWeight.Medium
                             )
                         }
@@ -487,9 +355,10 @@ fun BindingSheet(
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .clip(OneUi.shapes.inner)
                             .clickable { datePickerDialog.show() },
-                        shape = RoundedCornerShape(14.dp),
-                        color = if (isDark) Color(0xFF0C0C0E) else Color(0xFFF4F4F6)
+                        shape = OneUi.shapes.inner,
+                        color = OneUi.colors.surfaceElevated
                     ) {
                         Row(
                             modifier = Modifier
@@ -502,28 +371,30 @@ fun BindingSheet(
                                 Icon(
                                     imageVector = Icons.Outlined.CalendarMonth,
                                     contentDescription = "Select Date",
-                                    tint = ElectricCyan,
+                                    tint = OneUi.colors.accent,
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Column {
                                     Text(
                                         text = "Bound until date:",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = if (isDark) Color(0xFF777777) else Color(0xFF888888)
+                                        style = OneUi.typography.caption,
+                                        color = OneUi.colors.textSecondary
                                     )
                                     Text(
                                         text = uiState.selectedDateMillis?.let { formatDate(it) } ?: "Select date",
-                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                                        color = if (isDark) CrystalWhite else AmoledBlack
+                                        style = OneUi.typography.body,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = OneUi.colors.textPrimary
                                     )
                                 }
                             }
 
                             Text(
                                 text = "Change",
-                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                color = ElectricCyan
+                                style = OneUi.typography.caption,
+                                fontWeight = FontWeight.Bold,
+                                color = OneUi.colors.accent
                             )
                         }
                     }
@@ -533,8 +404,8 @@ fun BindingSheet(
                 if (uiState.currentMode == BindingModeOption.ONE_SHOT) {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp),
-                        color = if (isDark) Color(0xFF0C0C0E) else Color(0xFFF4F4F6)
+                        shape = OneUi.shapes.inner,
+                        color = OneUi.colors.surfaceElevated
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
@@ -543,14 +414,14 @@ fun BindingSheet(
                             Icon(
                                 imageVector = Icons.Outlined.Info,
                                 contentDescription = null,
-                                tint = ElectricAmber,
+                                tint = OneUi.badgePalette.orange,
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Text(
                                 text = "This note will be shown once when you open the target app, and won't appear again.",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = if (isDark) Color(0xFFAAAAAA) else Color(0xFF555555)
+                                style = OneUi.typography.caption,
+                                color = OneUi.colors.textSecondary
                             )
                         }
                     }
@@ -568,17 +439,16 @@ fun BindingSheet(
                     Icon(
                         imageVector = Icons.Outlined.Link,
                         contentDescription = null,
-                        tint = ElectricCyan,
+                        tint = OneUi.colors.accent,
                         modifier = Modifier.size(14.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = "ACTIVE BINDINGS",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            letterSpacing = 1.2.sp,
-                            fontWeight = FontWeight.Bold
-                        ),
-                        color = if (isDark) ElectricGreen else AmoledBlack
+                        style = OneUi.typography.caption,
+                        letterSpacing = 1.2.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = OneUi.colors.textSecondary
                     )
                 }
 
@@ -594,14 +464,15 @@ fun BindingSheet(
                                 Icon(
                                     imageVector = Icons.Outlined.Link,
                                     contentDescription = null,
-                                    tint = ElectricCyan,
+                                    tint = OneUi.colors.accent,
                                     modifier = Modifier.size(14.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = binding.appLabel,
-                                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-                                    color = if (isDark) CrystalWhite else AmoledBlack
+                                    style = OneUi.typography.body,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = OneUi.colors.textPrimary
                                 )
                             }
                             val detail = when (binding.type) {
@@ -624,10 +495,10 @@ fun BindingSheet(
                             }
                             Text(
                                 text = detail,
-                                style = MaterialTheme.typography.labelSmall,
+                                style = OneUi.typography.caption,
                                 color = if (binding.expiresAt != null && binding.expiresAt < System.currentTimeMillis())
-                                    ElectricPink
-                                else (if (isDark) Color(0xFF888888) else Color(0xFF666666))
+                                    OneUi.colors.error
+                                else OneUi.colors.textSecondary
                             )
                         }
                         IconButton(
@@ -637,7 +508,7 @@ fun BindingSheet(
                             Icon(
                                 imageVector = Icons.Outlined.DeleteOutline,
                                 contentDescription = "Remove",
-                                tint = ElectricPink,
+                                tint = OneUi.colors.error,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -648,52 +519,12 @@ fun BindingSheet(
             }
 
             // Search Bar
-            BasicTextField(
+            OneUiTextField(
                 value = uiState.searchQuery,
                 onValueChange = { viewModel.updateSearch(it) },
-                textStyle = MaterialTheme.typography.bodyMedium.copy(
-                    color = if (isDark) CrystalWhite else AmoledBlack
-                ),
-                cursorBrush = SolidColor(if (isDark) ElectricGreen else AmoledBlack),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(if (isDark) Color(0xFF0C0C0E) else Color(0xFFF4F4F6))
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                decorationBox = { innerTextField ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Outlined.Search,
-                            contentDescription = null,
-                            tint = if (isDark) ElectricGreen else AmoledBlack,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Box(modifier = Modifier.weight(1f)) {
-                            if (uiState.searchQuery.isEmpty()) {
-                                Text(
-                                    "Search all installed apps…",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = if (isDark) Color(0xFF666666) else Color(0xFF999999)
-                                )
-                            }
-                            innerTextField()
-                        }
-                        if (uiState.searchQuery.isNotEmpty()) {
-                            IconButton(
-                                onClick = { viewModel.updateSearch("") },
-                                modifier = Modifier.size(24.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Close,
-                                    contentDescription = "Clear search",
-                                    tint = if (isDark) Color(0xFF888888) else Color(0xFF666666),
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        }
-                    }
-                }
+                placeholder = "Search all installed apps…",
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -710,7 +541,7 @@ fun BindingSheet(
                             modifier = Modifier
                                 .size(8.dp)
                                 .clip(CircleShape)
-                                .background(ElectricGreen)
+                                .background(OneUi.badgePalette.green)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                     }
@@ -718,20 +549,19 @@ fun BindingSheet(
                         text = if (uiState.isShowingOpenApps) "CURRENTLY OPEN & RUNNING APPS"
                         else if (uiState.searchQuery.isNotBlank()) "SEARCH RESULTS (${uiState.displayedApps.size})"
                         else "ALL INSTALLED APPS (${uiState.displayedApps.size})",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            letterSpacing = 1.2.sp,
-                            fontWeight = FontWeight.Bold
-                        ),
-                        color = if (uiState.isShowingOpenApps) ElectricGreen
-                        else (if (isDark) Color(0xFF888888) else Color(0xFF666666))
+                        style = OneUi.typography.caption,
+                        letterSpacing = 1.2.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (uiState.isShowingOpenApps) OneUi.badgePalette.green
+                        else OneUi.colors.textSecondary
                     )
                 }
 
                 if (uiState.isShowingOpenApps) {
                     Text(
                         text = "Search to view all",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (isDark) Color(0xFF777777) else Color(0xFF888888)
+                        style = OneUi.typography.caption,
+                        color = OneUi.colors.textTertiary
                     )
                 }
             }
@@ -749,7 +579,7 @@ fun BindingSheet(
                     CircularProgressIndicator(
                         modifier = Modifier.size(28.dp),
                         strokeWidth = 2.5.dp,
-                        color = if (isDark) ElectricGreen else AmoledBlack
+                        color = OneUi.colors.accent
                     )
                 }
             } else if (uiState.displayedApps.isEmpty()) {
@@ -763,8 +593,8 @@ fun BindingSheet(
                         text = if (uiState.isShowingOpenApps)
                             "No recently open apps detected.\nType in the search bar above to select from all apps."
                         else "No apps found matching '${uiState.searchQuery}'",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (isDark) Color(0xFF777777) else Color(0xFF888888),
+                        style = OneUi.typography.body,
+                        color = OneUi.colors.textSecondary,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
                 }
@@ -778,25 +608,24 @@ fun BindingSheet(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(10.dp))
+                                .clip(OneUi.shapes.inner)
                                 .clickable(enabled = !alreadyBound) { viewModel.addBinding(app) }
-                                .padding(horizontal = 6.dp, vertical = 9.dp),
+                                .padding(horizontal = 8.dp, vertical = 9.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = app.label,
-                                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
-                                    color = if (alreadyBound)
-                                        (if (isDark) Color(0xFF555555) else Color(0xFFAAAAAA))
-                                    else (if (isDark) CrystalWhite else AmoledBlack),
+                                    style = OneUi.typography.body,
+                                    fontWeight = FontWeight.Medium,
+                                    color = if (alreadyBound) OneUi.colors.textTertiary else OneUi.colors.textPrimary,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
                                     text = app.packageName,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = if (isDark) Color(0xFF666666) else Color(0xFF888888),
+                                    style = OneUi.typography.caption,
+                                    color = OneUi.colors.textSecondary,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -805,7 +634,7 @@ fun BindingSheet(
                             if (alreadyBound) {
                                 Surface(
                                     shape = RoundedCornerShape(8.dp),
-                                    color = ElectricGreen.copy(alpha = 0.12f)
+                                    color = OneUi.badgePalette.green.copy(alpha = 0.16f)
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
@@ -815,13 +644,14 @@ fun BindingSheet(
                                         Icon(
                                             imageVector = Icons.Outlined.Check,
                                             contentDescription = null,
-                                            tint = ElectricGreen,
+                                            tint = OneUi.badgePalette.green,
                                             modifier = Modifier.size(14.dp)
                                         )
                                         Text(
                                             text = "Bound",
-                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                                            color = ElectricGreen
+                                            style = OneUi.typography.caption,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = OneUi.badgePalette.green
                                         )
                                     }
                                 }
