@@ -88,6 +88,66 @@ class ContextNotificationManager(
         notificationManager.cancel(CTS_NOTIFICATION_ID)
     }
 
+    fun showVideoProcessingProgress(progressPercent: Int, statusText: String) {
+        val launchIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            VIDEO_PROCESS_REQUEST_CODE,
+            launchIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val clampedProgress = progressPercent.coerceIn(0, 100)
+        val notification = NotificationCompat.Builder(context, VIDEO_PROCESS_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle("Summarizing video offline")
+            .setContentText(statusText)
+            .setProgress(100, clampedProgress, clampedProgress == 0)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setContentIntent(pendingIntent)
+            .build()
+
+        notificationManager.notify(VIDEO_PROCESS_NOTIFICATION_ID, notification)
+    }
+
+    fun dismissVideoProcessingNotification() {
+        notificationManager.cancel(VIDEO_PROCESS_NOTIFICATION_ID)
+    }
+
+    fun showVideoSummaryReadyNotification(noteId: String, noteTitle: String) {
+        dismissVideoProcessingNotification()
+
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra("noteId", noteId)
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            VIDEO_READY_REQUEST_CODE,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val safeTitle = noteTitle.ifBlank { "Video Summary" }
+        val notification = NotificationCompat.Builder(context, CONTEXT_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle("Video summary note ready")
+            .setContentText("Tap to open \"$safeTitle\"")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .setCategory(NotificationCompat.CATEGORY_RECOMMENDATION)
+            .build()
+
+        notificationManager.notify(VIDEO_READY_NOTIFICATION_ID, notification)
+    }
+
     fun showCtsExitNotification(event: CtsExitEvent) {
         if (!isCtsNotificationEnabled) return
 
@@ -221,17 +281,31 @@ class ContextNotificationManager(
                 setShowBadge(true)
                 enableVibration(true)
             }
+            val videoProcessChannel = NotificationChannel(
+                VIDEO_PROCESS_CHANNEL_ID,
+                "Video Summary Processing",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Shows offline progress while extracting video text and speech"
+                setShowBadge(false)
+            }
             notificationManager.createNotificationChannel(contextChannel)
             notificationManager.createNotificationChannel(ctsChannel)
+            notificationManager.createNotificationChannel(videoProcessChannel)
         }
     }
 
     companion object {
         const val CONTEXT_CHANNEL_ID = "naughty_context_v2"
         const val CTS_CHANNEL_ID = "naughty_cts_v1"
+        const val VIDEO_PROCESS_CHANNEL_ID = "naughty_video_process_v1"
         const val CONTEXT_NOTIFICATION_ID = 2001
         const val CTS_NOTIFICATION_ID = 2002
+        const val VIDEO_PROCESS_NOTIFICATION_ID = 2003
+        const val VIDEO_READY_NOTIFICATION_ID = 2004
         const val CTS_SAVE_REQUEST_CODE = 3001
         const val CTS_REVIEW_REQUEST_CODE = 3002
+        const val VIDEO_PROCESS_REQUEST_CODE = 3003
+        const val VIDEO_READY_REQUEST_CODE = 3004
     }
 }

@@ -232,6 +232,12 @@ class AppContainer(private val context: Context) {
         context = context.applicationContext
     )
 
+    val videoShareProcessor = com.example.naughty.util.VideoShareProcessor(
+        context = context.applicationContext,
+        noteRepository = noteRepository,
+        notificationManager = contextNotificationManager
+    )
+
     private val packageManager: PackageManager = context.packageManager
 
     // ViewModel factories

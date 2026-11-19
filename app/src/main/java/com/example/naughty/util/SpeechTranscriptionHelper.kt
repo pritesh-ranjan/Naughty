@@ -7,6 +7,8 @@ import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.ParcelFileDescriptor
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
@@ -53,9 +55,19 @@ class SpeechTranscriptionHelper(private val context: Context) {
 
     private var watchdogJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.IO)
+    private val mainHandler = Handler(Looper.getMainLooper())
     private var activeReadPipe: ParcelFileDescriptor? = null
     private var activeWritePipe: ParcelFileDescriptor? = null
     private var activeStreamJob: Job? = null
+    private var activeDecodeJob: Job? = null
+
+    private fun runOnMain(block: () -> Unit) {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            block()
+        } else {
+            mainHandler.post(block)
+        }
+    }
 
     val isOnDeviceAvailable: Boolean
         get() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -213,13 +225,17 @@ class SpeechTranscriptionHelper(private val context: Context) {
 
     /**
      * Transcribes an existing recorded audio file offline.
-     * Decodes the audio to 16 kHz 16-bit Mono PCM, verifies audio energy, adds VAD silence padding,
+     * Decodes the audio to 16 kHz 16-bit Mono PCM, verifies audio energy, optionally classifies
+     * Speech vs. Music via YAMNet ([AudioContentClassifier]), adds VAD silence padding,
      * and streams it smoothly into the SpeechRecognizer pipe in real-time.
      */
     fun transcribeAudioFile(
         audioFile: File,
         onFinal: (String) -> Unit,
-        onError: (String) -> Unit
+        onError: (String) -> Unit,
+        skipMusicOnly: Boolean = false,
+        enableFormatting: Boolean = false,
+        onClassified: ((AudioClassificationResult) -> Unit)? = null
     ) {
         if (!audioFile.exists()) {
             onError("Audio file does not exist")
@@ -244,200 +260,247 @@ class SpeechTranscriptionHelper(private val context: Context) {
         _partialText.value = ""
         _finalText.value = ""
 
-        val pcm16k = decodeAudioFileToPcm16k(audioFile)
-        if (pcm16k == null || pcm16k.isEmpty()) {
-            onError("Could not decode audio file")
-            return
+        val callbackFired = AtomicBoolean(false)
+        fun emitFinal(text: String) {
+            if (callbackFired.compareAndSet(false, true)) {
+                onFinal(text)
+            }
         }
-
-        // Verify audio contains non-silent speech energy
-        val sampleCount = pcm16k.size / 2
-        var maxAmp = 0
-        val bb = ByteBuffer.wrap(pcm16k).order(ByteOrder.LITTLE_ENDIAN)
-        for (i in 0 until sampleCount) {
-            val sample = bb.short.toInt()
-            val absVal = kotlin.math.abs(sample)
-            if (absVal > maxAmp) maxAmp = absVal
-        }
-        if (sampleCount == 0 || maxAmp < 150) {
-            onError("No speech detected in audio")
-            return
-        }
-
-        // Pad with leading (250 ms = 8000 bytes) and trailing (1000 ms = 32000 bytes) silence for VAD
-        val leadingSilence = ByteArray(8000)
-        val trailingSilence = ByteArray(32000)
-        val fullStream = ByteArray(leadingSilence.size + pcm16k.size + trailingSilence.size)
-        System.arraycopy(leadingSilence, 0, fullStream, 0, leadingSilence.size)
-        System.arraycopy(pcm16k, 0, fullStream, leadingSilence.size, pcm16k.size)
-        System.arraycopy(trailingSilence, 0, fullStream, leadingSilence.size + pcm16k.size, trailingSilence.size)
-
-        val recognizer = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && SpeechRecognizer.isOnDeviceRecognitionAvailable(context)) {
-            SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
-        } else if (SpeechRecognizer.isRecognitionAvailable(context)) {
-            SpeechRecognizer.createSpeechRecognizer(context)
-        } else {
-            onError("Speech recognition not available on this device")
-            return
-        }
-        speechRecognizer = recognizer
-
-        val pipes = try {
-            ParcelFileDescriptor.createPipe()
-        } catch (e: Exception) {
-            onError("Cannot create audio stream: ${e.localizedMessage}")
-            return
-        }
-        val readPipe = pipes[0]
-        val writePipe = pipes[1]
-        activeReadPipe = readPipe
-        activeWritePipe = writePipe
-
-        val durationMillis = (sampleCount.toLong() * 1000L) / 16000L
-        val watchdogTimeout = maxOf(16000L, durationMillis + 8000L)
-        watchdogJob = scope.launch {
-            delay(watchdogTimeout)
-            if (_isListening.value) {
-                _isListening.value = false
-                val partial = _partialText.value.trim()
-                if (partial.isNotBlank()) {
-                    onFinal(partial)
-                } else {
-                    onError("Transcription timed out")
-                }
-                destroy()
+        fun emitError(msg: String) {
+            if (callbackFired.compareAndSet(false, true)) {
+                onError(msg)
             }
         }
 
-        val isStreamingStarted = AtomicBoolean(false)
-        fun startStreaming() {
-            if (!isStreamingStarted.compareAndSet(false, true)) return
-            activeStreamJob = scope.launch(Dispatchers.IO) {
-                try {
-                    FileOutputStream(writePipe.fileDescriptor).use { outputStream ->
-                        val chunkSize = 640 // 20 ms at 16 kHz 16-bit mono PCM (320 samples)
-                        var offset = 0
-                        while (offset < fullStream.size && _isListening.value && isActive) {
-                            val count = minOf(chunkSize, fullStream.size - offset)
-                            outputStream.write(fullStream, offset, count)
-                            offset += count
-                            delay(15L) // Real-time streaming
+        activeDecodeJob = scope.launch(Dispatchers.IO) {
+            val pcm16k = decodeAudioFileToPcm16k(audioFile)
+            if (!isActive) return@launch
+            if (pcm16k == null || pcm16k.isEmpty()) {
+                emitError("Could not decode audio file")
+                return@launch
+            }
+
+            // Classify Speech vs. Music/Singing acoustically before invoking SpeechRecognizer
+            val classification = if (skipMusicOnly || onClassified != null) {
+                AudioContentClassifier.classifyPcm16k(context, pcm16k).also {
+                    onClassified?.invoke(it)
+                }
+            } else null
+
+            if (classification != null && classification.profile == AcousticProfile.SILENT_OR_NOISE) {
+                emitError("No speech detected in audio")
+                return@launch
+            }
+            if (skipMusicOnly && classification != null && !classification.shouldTranscribeSpeech) {
+                emitFinal("")
+                return@launch
+            }
+
+            // Verify audio contains non-silent speech energy
+            val sampleCount = pcm16k.size / 2
+            var maxAmp = 0
+            val bb = ByteBuffer.wrap(pcm16k).order(ByteOrder.LITTLE_ENDIAN)
+            for (i in 0 until sampleCount) {
+                val sample = bb.short.toInt()
+                val absVal = kotlin.math.abs(sample)
+                if (absVal > maxAmp) maxAmp = absVal
+            }
+            if (sampleCount == 0 || maxAmp < 150) {
+                emitError("No speech detected in audio")
+                return@launch
+            }
+
+            // Pad with leading (250 ms = 8000 bytes) and trailing (1000 ms = 32000 bytes) silence for VAD
+            val leadingSilence = ByteArray(8000)
+            val trailingSilence = ByteArray(32000)
+            val fullStream = ByteArray(leadingSilence.size + pcm16k.size + trailingSilence.size)
+            System.arraycopy(leadingSilence, 0, fullStream, 0, leadingSilence.size)
+            System.arraycopy(pcm16k, 0, fullStream, leadingSilence.size, pcm16k.size)
+            System.arraycopy(trailingSilence, 0, fullStream, leadingSilence.size + pcm16k.size, trailingSilence.size)
+
+            val pipes = try {
+                ParcelFileDescriptor.createPipe()
+            } catch (e: Exception) {
+                emitError("Cannot create audio stream: ${e.localizedMessage}")
+                return@launch
+            }
+            if (!isActive) {
+                try { pipes[0].close() } catch (_: Exception) {}
+                try { pipes[1].close() } catch (_: Exception) {}
+                return@launch
+            }
+            val readPipe = pipes[0]
+            val writePipe = pipes[1]
+            activeReadPipe = readPipe
+            activeWritePipe = writePipe
+
+            val durationMillis = (sampleCount.toLong() * 1000L) / 16000L
+            val watchdogTimeout = maxOf(16000L, durationMillis + 8000L)
+
+            val isStreamingStarted = AtomicBoolean(false)
+            fun startStreaming() {
+                if (!isStreamingStarted.compareAndSet(false, true)) return
+                activeStreamJob = scope.launch(Dispatchers.IO) {
+                    try {
+                        FileOutputStream(writePipe.fileDescriptor).use { outputStream ->
+                            val chunkSize = 640 // 20 ms at 16 kHz 16-bit mono PCM (320 samples)
+                            var offset = 0
+                            while (offset < fullStream.size && _isListening.value && isActive) {
+                                val count = minOf(chunkSize, fullStream.size - offset)
+                                outputStream.write(fullStream, offset, count)
+                                offset += count
+                                delay(15L) // Real-time streaming
+                            }
+                            outputStream.flush()
+                            // Keep pipe open for recognizer to finish processing
+                            delay(2500L)
                         }
-                        outputStream.flush()
-                        // Keep pipe open for recognizer to finish processing
-                        delay(2500L)
+                    } catch (_: Exception) {
+                    } finally {
+                        try { writePipe.close() } catch (_: Exception) {}
+                        activeWritePipe = null
                     }
-                } catch (_: Exception) {
-                } finally {
-                    try { writePipe.close() } catch (_: Exception) {}
-                    activeWritePipe = null
                 }
             }
-        }
 
-        recognizer.setRecognitionListener(object : RecognitionListener {
-            override fun onReadyForSpeech(params: Bundle?) {
-                _isListening.value = true
-                startStreaming()
-            }
-
-            override fun onBeginningOfSpeech() {
-                _isListening.value = true
-            }
-
-            override fun onRmsChanged(rmsdB: Float) {
-                _soundLevel.value = ((rmsdB + 2f) / 12f).coerceIn(0f, 1f)
-            }
-
-            override fun onBufferReceived(buffer: ByteArray?) {}
-
-            override fun onEndOfSpeech() {
-                _isListening.value = false
-            }
-
-            override fun onError(error: Int) {
-                watchdogJob?.cancel()
-                _isListening.value = false
-                val partial = _partialText.value.trim()
-                if (partial.isNotBlank()) {
-                    onFinal(partial)
+            runOnMain {
+                val recognizer = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && SpeechRecognizer.isOnDeviceRecognitionAvailable(context)) {
+                    SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
+                } else if (SpeechRecognizer.isRecognitionAvailable(context)) {
+                    SpeechRecognizer.createSpeechRecognizer(context)
                 } else {
-                    val msg = when (error) {
-                        SpeechRecognizer.ERROR_AUDIO -> "Audio processing error ($error)"
-                        SpeechRecognizer.ERROR_CLIENT -> "Speech recognition client error"
-                        SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Microphone permission required"
-                        SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Offline speech model not found"
-                        SpeechRecognizer.ERROR_NO_MATCH -> "No speech recognized in audio"
-                        SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Speech service is busy"
-                        SpeechRecognizer.ERROR_SERVER -> "Recognition server error"
-                        SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "No speech detected in audio"
-                        SpeechRecognizer.ERROR_TOO_MANY_REQUESTS -> "Too many requests, please wait"
-                        SpeechRecognizer.ERROR_SERVER_DISCONNECTED -> "Recognition service disconnected"
-                        SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED -> "Language not supported for offline recognition"
-                        SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE -> "Offline speech model not installed"
-                        else -> "Transcription error ($error)"
-                    }
-                    onError(msg)
+                    emitError("Speech recognition not available on this device")
+                    destroy()
+                    return@runOnMain
                 }
-                destroy()
-            }
+                speechRecognizer = recognizer
 
-            override fun onResults(results: Bundle?) {
-                watchdogJob?.cancel()
-                _isListening.value = false
-                val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                val text = matches?.firstOrNull()?.trim().orEmpty()
-                if (text.isNotBlank()) {
-                    _finalText.value = text
-                    onFinal(text)
-                } else {
-                    val fallback = _partialText.value.trim()
-                    if (fallback.isNotBlank()) {
-                        _finalText.value = fallback
-                        onFinal(fallback)
-                    } else {
-                        onError("No speech recognized in audio")
+                watchdogJob = scope.launch {
+                    delay(watchdogTimeout)
+                    if (_isListening.value) {
+                        _isListening.value = false
+                        val partial = _partialText.value.trim()
+                        if (partial.isNotBlank()) {
+                            emitFinal(partial)
+                        } else {
+                            emitError("Transcription timed out")
+                        }
+                        destroy()
                     }
                 }
-                destroy()
-            }
 
-            override fun onPartialResults(partialResults: Bundle?) {
-                val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                val text = matches?.firstOrNull()?.trim().orEmpty()
-                if (text.isNotBlank()) {
-                    _partialText.value = text
+                recognizer.setRecognitionListener(object : RecognitionListener {
+                    override fun onReadyForSpeech(params: Bundle?) {
+                        _isListening.value = true
+                        startStreaming()
+                    }
+
+                    override fun onBeginningOfSpeech() {
+                        _isListening.value = true
+                    }
+
+                    override fun onRmsChanged(rmsdB: Float) {
+                        _soundLevel.value = ((rmsdB + 2f) / 12f).coerceIn(0f, 1f)
+                    }
+
+                    override fun onBufferReceived(buffer: ByteArray?) {}
+
+                    override fun onEndOfSpeech() {
+                        _isListening.value = false
+                    }
+
+                    override fun onError(error: Int) {
+                        watchdogJob?.cancel()
+                        _isListening.value = false
+                        val partial = _partialText.value.trim()
+                        if (partial.isNotBlank()) {
+                            emitFinal(partial)
+                        } else {
+                            val msg = when (error) {
+                                SpeechRecognizer.ERROR_AUDIO -> "Audio processing error ($error)"
+                                SpeechRecognizer.ERROR_CLIENT -> "Speech recognition client error"
+                                SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Microphone permission required"
+                                SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Offline speech model not found"
+                                SpeechRecognizer.ERROR_NO_MATCH -> "No speech recognized in audio"
+                                SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Speech service is busy"
+                                SpeechRecognizer.ERROR_SERVER -> "Recognition server error"
+                                SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "No speech detected in audio"
+                                SpeechRecognizer.ERROR_TOO_MANY_REQUESTS -> "Too many requests, please wait"
+                                SpeechRecognizer.ERROR_SERVER_DISCONNECTED -> "Recognition service disconnected"
+                                SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED -> "Language not supported for offline recognition"
+                                SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE -> "Offline speech model not installed"
+                                else -> "Transcription error ($error)"
+                            }
+                            emitError(msg)
+                        }
+                        destroy()
+                    }
+
+                    override fun onResults(results: Bundle?) {
+                        watchdogJob?.cancel()
+                        _isListening.value = false
+                        val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                        val text = matches?.firstOrNull()?.trim().orEmpty()
+                        if (text.isNotBlank()) {
+                            _finalText.value = text
+                            emitFinal(text)
+                        } else {
+                            val fallback = _partialText.value.trim()
+                            if (fallback.isNotBlank()) {
+                                _finalText.value = fallback
+                                emitFinal(fallback)
+                            } else {
+                                emitError("No speech recognized in audio")
+                            }
+                        }
+                        destroy()
+                    }
+
+                    override fun onPartialResults(partialResults: Bundle?) {
+                        val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                        val text = matches?.firstOrNull()?.trim().orEmpty()
+                        if (text.isNotBlank()) {
+                            _partialText.value = text
+                        }
+                    }
+
+                    override fun onEvent(eventType: Int, params: Bundle?) {}
+                })
+
+                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
+                    putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+                    putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                    if (enableFormatting && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        putExtra(
+                            RecognizerIntent.EXTRA_ENABLE_FORMATTING,
+                            RecognizerIntent.FORMATTING_OPTIMIZE_QUALITY
+                        )
+                    }
+                    putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE, readPipe)
+                    putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_SAMPLING_RATE, 16000)
+                    putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_CHANNEL_COUNT, 1)
+                    putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_ENCODING, android.media.AudioFormat.ENCODING_PCM_16BIT)
+                }
+
+                try {
+                    _isListening.value = true
+                    recognizer.startListening(intent)
+                    // Fallback: If onReadyForSpeech hasn't triggered streaming after 400ms, start streaming
+                    scope.launch {
+                        delay(400L)
+                        if (!isStreamingStarted.get() && _isListening.value) {
+                            startStreaming()
+                        }
+                    }
+                } catch (e: Exception) {
+                    watchdogJob?.cancel()
+                    _isListening.value = false
+                    emitError("Could not start file transcription: ${e.localizedMessage}")
+                    destroy()
                 }
             }
-
-            override fun onEvent(eventType: Int, params: Bundle?) {}
-        })
-
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
-            putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
-            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-            putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE, readPipe)
-            putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_SAMPLING_RATE, 16000)
-            putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_CHANNEL_COUNT, 1)
-            putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_ENCODING, android.media.AudioFormat.ENCODING_PCM_16BIT)
-        }
-
-        try {
-            recognizer.startListening(intent)
-            // Fallback: If onReadyForSpeech hasn't triggered streaming after 400ms, start streaming
-            scope.launch {
-                delay(400L)
-                if (!isStreamingStarted.get() && _isListening.value) {
-                    startStreaming()
-                }
-            }
-        } catch (e: Exception) {
-            watchdogJob?.cancel()
-            _isListening.value = false
-            onError("Could not start file transcription: ${e.localizedMessage}")
-            destroy()
         }
     }
 
@@ -560,15 +623,20 @@ class SpeechTranscriptionHelper(private val context: Context) {
         watchdogJob = null
         activeStreamJob?.cancel()
         activeStreamJob = null
-        try {
-            speechRecognizer?.stopListening()
-        } catch (_: Exception) {}
+        val sr = speechRecognizer
+        if (sr != null) {
+            runOnMain {
+                try { sr.stopListening() } catch (_: Exception) {}
+            }
+        }
         _isListening.value = false
     }
 
     fun destroy() {
         watchdogJob?.cancel()
         watchdogJob = null
+        activeDecodeJob?.cancel()
+        activeDecodeJob = null
         activeStreamJob?.cancel()
         activeStreamJob = null
         _isListening.value = false
@@ -580,13 +648,35 @@ class SpeechTranscriptionHelper(private val context: Context) {
             activeReadPipe?.close()
         } catch (_: Exception) {}
         activeReadPipe = null
-        try {
-            speechRecognizer?.destroy()
-        } catch (_: Exception) {}
+        val sr = speechRecognizer
         speechRecognizer = null
+        if (sr != null) {
+            runOnMain {
+                try { sr.destroy() } catch (_: Exception) {}
+            }
+        }
     }
 
     companion object {
+        fun hasAudioTrack(file: File): Boolean {
+            if (!file.exists()) return false
+            val extractor = MediaExtractor()
+            return try {
+                extractor.setDataSource(file.absolutePath)
+                for (i in 0 until extractor.trackCount) {
+                    val format = extractor.getTrackFormat(i)
+                    val mime = format.getString(MediaFormat.KEY_MIME) ?: ""
+                    if (mime.startsWith("audio/")) {
+                        return true
+                    }
+                }
+                false
+            } catch (_: Exception) {
+                false
+            } finally {
+                try { extractor.release() } catch (_: Exception) {}
+            }
+        }
         internal fun resampleTo16kMono(
             rawBytes: ByteArray,
             inputSampleRate: Int,

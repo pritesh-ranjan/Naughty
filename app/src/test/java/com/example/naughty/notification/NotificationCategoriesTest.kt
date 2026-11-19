@@ -14,13 +14,15 @@ class NotificationCategoriesTest {
         val channelIds = setOf(
             ContextNotificationManager.CONTEXT_CHANNEL_ID,
             ContextNotificationManager.CTS_CHANNEL_ID,
+            ContextNotificationManager.VIDEO_PROCESS_CHANNEL_ID,
             ReminderManager.REMINDER_CHANNEL_ID,
             "naughty_detector_service_v1"
         )
-        // All 4 channel IDs must be unique
-        assertEquals(4, channelIds.size)
+        // All 5 channel IDs must be unique
+        assertEquals(5, channelIds.size)
         assertEquals("naughty_cts_v1", ContextNotificationManager.CTS_CHANNEL_ID)
         assertEquals("naughty_context_v2", ContextNotificationManager.CONTEXT_CHANNEL_ID)
+        assertEquals("naughty_video_process_v1", ContextNotificationManager.VIDEO_PROCESS_CHANNEL_ID)
         assertEquals("naughty_reminders_v1", ReminderManager.REMINDER_CHANNEL_ID)
     }
 

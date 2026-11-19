@@ -42,6 +42,12 @@ data class PendingAudioShare(
     val text: String?
 )
 
+data class PendingVideoShare(
+    val uri: Uri,
+    val subject: String?,
+    val text: String?
+)
+
 object ShareIntentHandler {
 
     private const val EXTRA_HANDLED_SHARE = "com.example.naughty.HANDLED_SHARE"
@@ -269,10 +275,9 @@ object ShareIntentHandler {
         }
     }
 
-    fun extractImageUris(intent: Intent): List<Uri> {
+    private fun extractStreamUris(intent: Intent): List<Uri> {
         val uris = mutableListOf<Uri>()
 
-        // 1. Check EXTRA_STREAM based on action
         if (intent.action == Intent.ACTION_SEND_MULTIPLE) {
             try {
                 val streamList = IntentCompat.getParcelableArrayListExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
@@ -289,7 +294,6 @@ object ShareIntentHandler {
             } catch (_: Exception) {}
         }
 
-        // 3. Check ClipData
         val clipData = intent.clipData
         if (clipData != null) {
             for (i in 0 until clipData.itemCount) {
@@ -300,7 +304,6 @@ object ShareIntentHandler {
             }
         }
 
-        // 4. Check intent.data
         val dataUri = intent.data
         if (dataUri != null && dataUri !in uris) {
             uris.add(dataUri)
@@ -309,17 +312,53 @@ object ShareIntentHandler {
         return uris.distinct()
     }
 
+    private fun isAudioUriPath(uri: Uri): Boolean {
+        return isAudioFilePath(uri.path)
+    }
+
+    private fun isVideoUriPath(uri: Uri): Boolean {
+        return isVideoFilePath(uri.path)
+    }
+
+    internal fun isAudioFilePath(rawPath: String?): Boolean {
+        val path = rawPath?.lowercase().orEmpty()
+        return path.endsWith(".opus") || path.endsWith(".ogg") || path.endsWith(".m4a") ||
+            path.endsWith(".mp3") || path.endsWith(".wav") || path.endsWith(".aac")
+    }
+
+    internal fun isVideoFilePath(rawPath: String?): Boolean {
+        val path = rawPath?.lowercase().orEmpty()
+        return path.endsWith(".mp4") || path.endsWith(".mov") || path.endsWith(".webm") ||
+            path.endsWith(".mkv") || path.endsWith(".3gp") || path.endsWith(".avi") ||
+            path.endsWith(".m4v")
+    }
+
+    internal fun isAudioMime(type: String?): Boolean {
+        return type?.startsWith("audio/", ignoreCase = true) == true ||
+            type?.contains("ogg", ignoreCase = true) == true ||
+            type?.contains("opus", ignoreCase = true) == true
+    }
+
+    internal fun isVideoMime(type: String?): Boolean {
+        return type?.startsWith("video/", ignoreCase = true) == true
+    }
+
+    fun extractImageUris(intent: Intent): List<Uri> = extractStreamUris(intent)
+
     fun extractImageShare(intent: Intent): PendingImageShare? {
         val action = intent.action ?: return null
         val type = intent.type
-        val isImageAction = action == Intent.ACTION_SEND_MULTIPLE ||
-                (type?.startsWith("image/") == true) ||
-                intent.hasExtra(Intent.EXTRA_STREAM)
+        if (isVideoMime(type) || isAudioMime(type)) return null
+
+        val uris = extractStreamUris(intent)
+        if (uris.isEmpty()) return null
+        if ((type == null || type == "*/*") && uris.any { isVideoUriPath(it) || isAudioUriPath(it) }) return null
+
+        val isImageAction = (type?.startsWith("image/", ignoreCase = true) == true) ||
+            ((action == Intent.ACTION_SEND_MULTIPLE || intent.hasExtra(Intent.EXTRA_STREAM)) &&
+                (type == null || type == "*/*"))
 
         if (!isImageAction) return null
-
-        val uris = extractImageUris(intent)
-        if (uris.isEmpty()) return null
 
         val subject = intent.getStringExtra(Intent.EXTRA_SUBJECT)
             ?: intent.getCharSequenceExtra(Intent.EXTRA_SUBJECT)?.toString()
@@ -405,58 +444,17 @@ object ShareIntentHandler {
         )
     }
 
-    fun extractAudioUris(intent: Intent): List<Uri> {
-        val uris = mutableListOf<Uri>()
-
-        if (intent.action == Intent.ACTION_SEND_MULTIPLE) {
-            try {
-                val streamList = IntentCompat.getParcelableArrayListExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
-                if (streamList != null) {
-                    uris.addAll(streamList.filterNotNull())
-                }
-            } catch (_: Exception) {}
-        } else {
-            try {
-                val singleStream = IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
-                if (singleStream != null) {
-                    uris.add(singleStream)
-                }
-            } catch (_: Exception) {}
-        }
-
-        val clipData = intent.clipData
-        if (clipData != null) {
-            for (i in 0 until clipData.itemCount) {
-                val itemUri = clipData.getItemAt(i)?.uri
-                if (itemUri != null && itemUri !in uris) {
-                    uris.add(itemUri)
-                }
-            }
-        }
-
-        val dataUri = intent.data
-        if (dataUri != null && dataUri !in uris) {
-            uris.add(dataUri)
-        }
-
-        return uris.distinct()
-    }
+    fun extractAudioUris(intent: Intent): List<Uri> = extractStreamUris(intent)
 
     fun extractAudioShare(intent: Intent): PendingAudioShare? {
-        val action = intent.action ?: return null
+        intent.action ?: return null
         val type = intent.type
-        val isAudioAction = (type?.startsWith("audio/") == true) ||
-                (type?.contains("ogg", ignoreCase = true) == true) ||
-                (type?.contains("opus", ignoreCase = true) == true)
+        if (isVideoMime(type)) return null
 
         val uris = extractAudioUris(intent)
-        val hasAudioUri = uris.any { uri ->
-            val path = uri.path?.lowercase().orEmpty()
-            path.endsWith(".opus") || path.endsWith(".ogg") || path.endsWith(".m4a") ||
-                    path.endsWith(".mp3") || path.endsWith(".wav") || path.endsWith(".aac")
-        }
+        val hasAudioUri = uris.any { isAudioUriPath(it) }
 
-        if (!isAudioAction && !hasAudioUri) return null
+        if (!isAudioMime(type) && !hasAudioUri) return null
         if (uris.isEmpty()) return null
 
         val subject = intent.getStringExtra(Intent.EXTRA_SUBJECT)
@@ -468,6 +466,26 @@ object ShareIntentHandler {
             ?: intent.clipData?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString()
 
         return PendingAudioShare(uris = uris, subject = subject, text = text)
+    }
+
+    fun extractVideoShare(intent: Intent): PendingVideoShare? {
+        intent.action ?: return null
+        val type = intent.type
+        val uris = extractStreamUris(intent)
+        if (uris.isEmpty()) return null
+
+        val hasVideoUri = uris.any { isVideoUriPath(it) }
+        if (!isVideoMime(type) && !hasVideoUri) return null
+
+        val subject = intent.getStringExtra(Intent.EXTRA_SUBJECT)
+            ?: intent.getCharSequenceExtra(Intent.EXTRA_SUBJECT)?.toString()
+            ?: intent.getStringExtra(Intent.EXTRA_TITLE)
+
+        val text = intent.getStringExtra(Intent.EXTRA_TEXT)
+            ?: intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()
+            ?: intent.clipData?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString()
+
+        return PendingVideoShare(uri = uris.first(), subject = subject, text = text)
     }
 
     fun copyAudioUriToInternalStorage(context: Context, uri: Uri): File? {

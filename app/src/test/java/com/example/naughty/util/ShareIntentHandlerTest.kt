@@ -286,4 +286,22 @@ class ShareIntentHandlerTest {
         assertTrue(AudioShareMode.entries.contains(AudioShareMode.TRANSCRIBE_ONLY))
         assertTrue(AudioShareMode.entries.contains(AudioShareMode.BOTH))
     }
+
+    @Test
+    fun testVideoMimeAndFilePathDetection() {
+        assertTrue(ShareIntentHandler.isVideoMime("video/mp4"))
+        assertTrue(ShareIntentHandler.isVideoMime("video/*"))
+        assertTrue(ShareIntentHandler.isVideoMime("VIDEO/QUICKTIME"))
+        assertFalse(ShareIntentHandler.isVideoMime("image/png"))
+        assertFalse(ShareIntentHandler.isVideoMime("audio/mpeg"))
+        assertFalse(ShareIntentHandler.isVideoMime(null))
+
+        assertTrue(ShareIntentHandler.isVideoFilePath("/storage/emulated/0/Movies/clip.mp4"))
+        assertTrue(ShareIntentHandler.isVideoFilePath("recording.MOV"))
+        assertTrue(ShareIntentHandler.isVideoFilePath("screen_record.webm"))
+        assertTrue(ShareIntentHandler.isVideoFilePath("demo.mkv"))
+        assertFalse(ShareIntentHandler.isVideoFilePath("photo.jpg"))
+        assertFalse(ShareIntentHandler.isVideoFilePath("voice.opus"))
+        assertFalse(ShareIntentHandler.isVideoFilePath(null))
+    }
 }

@@ -69,7 +69,7 @@
             android:exported="true"
             android:label="@string/share_new_note"
             android:icon="@mipmap/ic_launcher">
-            <!-- Receive shared plain text, links, markdown, and text types -->
+            <!-- Receive shared plain text, links, markdown, images, audio, and short videos -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -77,14 +77,16 @@
                 <data android:mimeType="text/*" />
                 <data android:mimeType="image/*" />
                 <data android:mimeType="audio/*" />
+                <data android:mimeType="video/*" />
             </intent-filter>
 
-            <!-- Receive shared multiple images or audio files -->
+            <!-- Receive shared multiple images, audio, or video files -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="image/*" />
                 <data android:mimeType="audio/*" />
+                <data android:mimeType="video/*" />
             </intent-filter>
         </activity-alias>
 

@@ -4,15 +4,27 @@ import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.LockOpen
+import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Timeline
@@ -30,21 +42,26 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.naughty.NaughtyApp
 import com.example.naughty.data.local.NoteMetadata
 import com.example.naughty.ui.components.ClipSaveSheet
 import com.example.naughty.ui.oneui.components.OneUiBottomDock
 import com.example.naughty.ui.oneui.components.OneUiBottomSheet
+import com.example.naughty.ui.oneui.components.OneUiCard
 import com.example.naughty.ui.oneui.components.OneUiCardGroup
 import com.example.naughty.ui.oneui.components.OneUiChipRow
 import com.example.naughty.ui.oneui.components.OneUiConfirmDialog
 import com.example.naughty.ui.oneui.components.OneUiEmptyState
 import com.example.naughty.ui.oneui.components.OneUiHeaderStyle
+import com.example.naughty.ui.oneui.components.OneUiIconBadge
 import com.example.naughty.ui.oneui.components.OneUiLeading
 import com.example.naughty.ui.oneui.components.OneUiListItem
+import com.example.naughty.ui.oneui.components.OneUiProgressBar
 import com.example.naughty.ui.oneui.components.OneUiScaffold
 import com.example.naughty.ui.oneui.components.OneUiSectionHeader
 import com.example.naughty.ui.oneui.components.OneUiTrailing
@@ -52,7 +69,9 @@ import com.example.naughty.ui.oneui.theme.OneUi
 import com.example.naughty.util.BiometricAuthHelper
 import com.example.naughty.util.BiometricStatus
 import com.example.naughty.util.NoteLockSession
+import com.example.naughty.util.VideoProcessingState
 import com.example.naughty.util.findFragmentActivity
+import androidx.compose.ui.text.font.FontWeight
 import kotlinx.coroutines.launch
 import androidx.compose.material3.ExperimentalMaterial3Api
 
@@ -74,6 +93,9 @@ fun NoteListScreen(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val activity = remember(context) { context.findFragmentActivity() }
+    val app = remember(context) { context.applicationContext as? NaughtyApp }
+    val videoProcessingState by (app?.container?.videoShareProcessor?.state
+        ?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(VideoProcessingState.Idle) })
 
     val clipboardManager = remember(context) {
         context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
@@ -199,6 +221,135 @@ fun NoteListScreen(
                             }
                         }
                     )
+                }
+            }
+        }
+
+        // Live Non-Blocking Video Summarization Status Card
+        if (videoProcessingState !is VideoProcessingState.Idle) {
+            item(key = "home_video_status") {
+                Box(modifier = Modifier.padding(horizontal = OneUi.dimens.screenGutter)) {
+                    when (val vState = videoProcessingState) {
+                        is VideoProcessingState.Processing -> {
+                            OneUiCard {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    OneUiIconBadge(
+                                        icon = Icons.Outlined.Movie,
+                                        tint = OneUi.colors.badge.purple
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text(
+                                                text = "Summarizing video offline",
+                                                style = OneUi.type.cardTitle,
+                                                color = OneUi.colors.textPrimary
+                                            )
+                                            Text(
+                                                text = "${vState.progressPercent}%",
+                                                style = OneUi.type.caption,
+                                                fontWeight = FontWeight.Bold,
+                                                color = OneUi.colors.accent
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = vState.stageLabel,
+                                            style = OneUi.type.caption,
+                                            color = OneUi.colors.textSecondary
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        OneUiProgressBar(progress = vState.progressPercent / 100f)
+                                    }
+                                }
+                            }
+                        }
+
+                        is VideoProcessingState.Completed -> {
+                            OneUiCard(
+                                onClick = {
+                                    app?.container?.videoShareProcessor?.clearCompletedOrError()
+                                    onNoteClick(vState.noteId)
+                                }
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    OneUiIconBadge(
+                                        icon = Icons.Outlined.CheckCircle,
+                                        tint = OneUi.colors.badge.green
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "Video summary ready",
+                                            style = OneUi.type.cardTitle,
+                                            color = OneUi.colors.textPrimary
+                                        )
+                                        Text(
+                                            text = "Tap to open \"${vState.noteTitle}\"",
+                                            style = OneUi.type.caption,
+                                            color = OneUi.colors.textSecondary
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = { app?.container?.videoShareProcessor?.clearCompletedOrError() }
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Close,
+                                            contentDescription = "Dismiss",
+                                            tint = OneUi.colors.textSecondary
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        is VideoProcessingState.Error -> {
+                            OneUiCard {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    OneUiIconBadge(
+                                        icon = Icons.Outlined.ErrorOutline,
+                                        tint = OneUi.colors.destructive
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "Video summary failed",
+                                            style = OneUi.type.cardTitle,
+                                            color = OneUi.colors.textPrimary
+                                        )
+                                        Text(
+                                            text = vState.message,
+                                            style = OneUi.type.caption,
+                                            color = OneUi.colors.textSecondary
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = { app?.container?.videoShareProcessor?.clearCompletedOrError() }
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Close,
+                                            contentDescription = "Dismiss",
+                                            tint = OneUi.colors.textSecondary
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        VideoProcessingState.Idle -> Unit
+                    }
                 }
             }
         }

@@ -16,6 +16,7 @@ room = "2.8.4"
 ksp = "2.3.12"
 datastore = "1.1.7"
 mlkitTextRecognition = "16.0.1"
+litert = "1.4.2"
 biometric = "1.2.0-alpha05"
 coil = "3.1.0"
 profileinstaller = "1.4.1"
@@ -52,6 +53,9 @@ androidx-datastore-preferences = { module = "androidx.datastore:datastore-prefer
 
 # Google ML Kit Text Recognition (Bundled on-device)
 mlkit-text-recognition = { module = "com.google.mlkit:text-recognition", version.ref = "mlkitTextRecognition" }
+
+# Google AI Edge LiteRT (On-device TFLite inference, 16KB page-aligned)
+google-litert = { module = "com.google.ai.edge.litert:litert", version.ref = "litert" }
 
 # Biometric
 androidx-biometric = { module = "androidx.biometric:biometric", version.ref = "biometric" }

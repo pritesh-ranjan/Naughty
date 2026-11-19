@@ -93,6 +93,10 @@ android {
         excludes += "/META-INF/{AL2.0,LGPL2.1}"
       }
     }
+
+    androidResources {
+      noCompress += "tflite"
+    }
 }
 
 kotlin {
@@ -148,6 +152,9 @@ dependencies {
 
   // Google ML Kit Text Recognition (Local on-device)
   implementation(libs.mlkit.text.recognition)
+
+  // Google AI Edge LiteRT (Local YAMNet Speech vs. Music classification)
+  implementation(libs.google.litert)
 
   // Biometric & Device Credential Authentication
   implementation(libs.androidx.biometric)

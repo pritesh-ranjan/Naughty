@@ -20,6 +20,10 @@
 # Google ML Kit offline text recognition
 -keep class com.google.mlkit.** { *; }
 
+# Google AI Edge LiteRT (YAMNet offline audio classification)
+-keep class org.tensorflow.lite.** { *; }
+-dontwarn org.tensorflow.lite.**
+
 # AndroidX Biometric & Device Credentials
 -keep class androidx.biometric.** { *; }
 

@@ -1,6 +1,7 @@
 package com.example.naughty
 
 import android.content.Intent
+import android.graphics.Bitmap
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -36,6 +37,7 @@ import com.example.naughty.ui.components.FeatureShowcaseSheet
 import com.example.naughty.ui.components.PermissionGate
 import com.example.naughty.ui.components.ShareAudioOptionSheet
 import com.example.naughty.ui.components.ShareImageOptionSheet
+import com.example.naughty.ui.components.ShareVideoOptionSheet
 import com.example.naughty.ui.components.UniversalSearchOverlay
 import com.example.naughty.ui.components.shouldShowFeatureShowcase
 import com.example.naughty.ui.editor.NoteEditorScreen
@@ -56,7 +58,10 @@ import com.example.naughty.util.AudioShareMode
 import com.example.naughty.util.ImageShareMode
 import com.example.naughty.util.PendingAudioShare
 import com.example.naughty.util.PendingImageShare
+import com.example.naughty.util.PendingVideoShare
 import com.example.naughty.util.ShareIntentHandler
+import com.example.naughty.util.VideoMetadata
+import com.example.naughty.util.VideoProcessingState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -78,6 +83,12 @@ class MainActivity : FragmentActivity() {
     private var pendingAudioShare by mutableStateOf<PendingAudioShare?>(null)
     private var isProcessingAudioShare by mutableStateOf(false)
     private var audioProcessingText by mutableStateOf("")
+
+    private var pendingVideoShare by mutableStateOf<PendingVideoShare?>(null)
+    private var inspectedVideoMetadata by mutableStateOf<VideoMetadata?>(null)
+    private var videoThumbnail by mutableStateOf<Bitmap?>(null)
+    private var isInspectingVideo by mutableStateOf(false)
+    private var autoOpenCompletedVideoSheet by mutableStateOf(false)
 
     private var showFeatureShowcase by mutableStateOf(false)
     private var showcaseIsFirstLaunch by mutableStateOf(false)
@@ -122,7 +133,7 @@ class MainActivity : FragmentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     PermissionGate(
-                        bypass = isBypassed || pendingNoteId != null || pendingTrackerId != null || pendingImageShare != null || pendingAudioShare != null || pendingOpenTimeline
+                        bypass = isBypassed || pendingNoteId != null || pendingTrackerId != null || pendingImageShare != null || pendingAudioShare != null || pendingVideoShare != null || pendingOpenTimeline
                     ) {
                         NaughtyNavigation(
                             initialNoteId = pendingNoteId,
@@ -224,9 +235,48 @@ class MainActivity : FragmentActivity() {
                                 }
                             )
                         }
+                        pendingVideoShare?.let { videoShare ->
+                            val app = applicationContext as? NaughtyApp ?: return@let
+                            val processor = app.container.videoShareProcessor
+                            val videoState by processor.state.collectAsState()
+
+                            LaunchedEffect(videoState, autoOpenCompletedVideoSheet) {
+                                val completed = videoState as? VideoProcessingState.Completed
+                                if (completed != null && autoOpenCompletedVideoSheet) {
+                                    autoOpenCompletedVideoSheet = false
+                                    pendingVideoShare = null
+                                    videoThumbnail = null
+                                    inspectedVideoMetadata = null
+                                    processor.clearCompletedOrError()
+                                    Toast.makeText(
+                                        this@MainActivity,
+                                        "Video summarized to note",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                    pendingNoteId = completed.noteId
+                                }
+                            }
+
+                            ShareVideoOptionSheet(
+                                thumbnail = videoThumbnail,
+                                metadata = inspectedVideoMetadata,
+                                isInspecting = isInspectingVideo,
+                                processingState = videoState,
+                                onStartSummarize = {
+                                    autoOpenCompletedVideoSheet = true
+                                    processor.startProcessing(videoShare, inspectedVideoMetadata)
+                                },
+                                onDismiss = {
+                                    autoOpenCompletedVideoSheet = false
+                                    pendingVideoShare = null
+                                    videoThumbnail = null
+                                    inspectedVideoMetadata = null
+                                }
+                            )
+                        }
                     }
 
-                    val isHandlingShare = pendingImageShare != null || pendingAudioShare != null
+                    val isHandlingShare = pendingImageShare != null || pendingAudioShare != null || pendingVideoShare != null
                     if (showFeatureShowcase && !isHandlingShare) {
                         FeatureShowcaseSheet(
                             versionName = getAppVersionName(),
@@ -309,10 +359,25 @@ class MainActivity : FragmentActivity() {
             val app = applicationContext as? NaughtyApp ?: return
             val repository = app.container.noteRepository
 
-            val imageShare = ShareIntentHandler.extractImageShare(intent)
-            if (imageShare != null) {
+            val videoShare = ShareIntentHandler.extractVideoShare(intent)
+            if (videoShare != null) {
                 ShareIntentHandler.markAsHandled(intent)
-                pendingImageShare = imageShare
+                autoOpenCompletedVideoSheet = false
+                pendingVideoShare = videoShare
+                isInspectingVideo = true
+                inspectedVideoMetadata = null
+                videoThumbnail = null
+                val processor = app.container.videoShareProcessor
+                processor.clearCompletedOrError()
+                lifecycleScope.launch {
+                    val metadata = processor.inspectVideoUri(videoShare.uri)
+                    val thumb = processor.extractPreviewThumbnail(videoShare.uri)
+                    withContext(Dispatchers.Main) {
+                        inspectedVideoMetadata = metadata
+                        videoThumbnail = thumb
+                        isInspectingVideo = false
+                    }
+                }
                 return
             }
 
@@ -320,6 +385,13 @@ class MainActivity : FragmentActivity() {
             if (audioShare != null) {
                 ShareIntentHandler.markAsHandled(intent)
                 pendingAudioShare = audioShare
+                return
+            }
+
+            val imageShare = ShareIntentHandler.extractImageShare(intent)
+            if (imageShare != null) {
+                ShareIntentHandler.markAsHandled(intent)
+                pendingImageShare = imageShare
                 return
             }
 
