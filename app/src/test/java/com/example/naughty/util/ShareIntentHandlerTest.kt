@@ -304,4 +304,20 @@ class ShareIntentHandlerTest {
         assertFalse(ShareIntentHandler.isVideoFilePath("voice.opus"))
         assertFalse(ShareIntentHandler.isVideoFilePath(null))
     }
+
+    @Test
+    fun testFormatNoteWithImages_capsAtTenImages() {
+        val images = (1..13).map { "file:///data/user/0/com.example.naughty/files/note_images/img_$it.jpg" }
+        val note = ShareIntentHandler.formatNoteWithImages(
+            subject = null,
+            text = null,
+            localImageUris = images
+        )
+        assertNotNull(note)
+        assertEquals("10 Photos", note?.title)
+        val extracted = com.example.naughty.ui.editor.EditorBlockParser.extractImages(note!!.content)
+        assertEquals(10, extracted.size)
+        assertTrue(note.content.contains("img_10.jpg"))
+        assertFalse(note.content.contains("img_11.jpg"))
+    }
 }

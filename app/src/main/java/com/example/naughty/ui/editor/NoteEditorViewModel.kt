@@ -21,7 +21,14 @@ import kotlinx.coroutines.withContext
 
 import com.example.naughty.notification.ReminderManager
 import com.example.naughty.ui.theme.NoteThemeRegistry
+import com.example.naughty.util.ImageOptimizer
 import com.example.naughty.util.NotePdfGenerator
+
+data class AddImagesResult(
+    val addedCount: Int,
+    val skippedDueToLimit: Int,
+    val totalCount: Int
+)
 
 data class EditorUiState(
     val noteId: String = "",
@@ -636,11 +643,20 @@ class NoteEditorViewModel(
         updateContent(newContent)
     }
 
+    fun getRemainingImageSlots(): Int {
+        return remainingImageSlots(_uiState.value.content)
+    }
+
+    fun addImages(imageUris: List<String>): AddImagesResult {
+        val (updatedContent, result) = appendImagesWithLimit(_uiState.value.content, imageUris)
+        if (result.addedCount > 0) {
+            updateContent(updatedContent)
+        }
+        return result
+    }
+
     fun addImage(imageUri: String) {
-        if (imageUri.isBlank()) return
-        val currentContent = _uiState.value.content
-        val imageStr = "\n\n![Image]($imageUri)\n"
-        updateContent(currentContent.trimEnd() + imageStr)
+        addImages(listOf(imageUri))
     }
 
     fun removeImage(imageUri: String) {
@@ -933,6 +949,46 @@ class NoteEditorViewModel(
                     Toast.makeText(context, "Failed to save PDF: ${e.message}", Toast.LENGTH_SHORT).show()
                 }
             }
+        }
+    }
+
+    companion object {
+        fun remainingImageSlots(
+            content: String,
+            maxImages: Int = ImageOptimizer.MAX_IMAGES_PER_NOTE
+        ): Int {
+            val existingCount = EditorBlockParser.extractImages(content).size
+            return (maxImages - existingCount).coerceAtLeast(0)
+        }
+
+        fun appendImagesWithLimit(
+            currentContent: String,
+            imageUris: List<String>,
+            maxImages: Int = ImageOptimizer.MAX_IMAGES_PER_NOTE
+        ): Pair<String, AddImagesResult> {
+            val validUris = imageUris.map { it.trim() }.filter { it.isNotBlank() }
+            val existingCount = EditorBlockParser.extractImages(currentContent).size
+            if (validUris.isEmpty()) {
+                return currentContent to AddImagesResult(0, 0, existingCount)
+            }
+            val remaining = (maxImages - existingCount).coerceAtLeast(0)
+            if (remaining == 0) {
+                return currentContent to AddImagesResult(0, validUris.size, existingCount)
+            }
+            val accepted = validUris.take(remaining)
+            val skipped = (validUris.size - accepted.size).coerceAtLeast(0)
+            val imageBlock = accepted.joinToString("\n\n") { "![Image]($it)" }
+            val trimmed = currentContent.trimEnd()
+            val updated = if (trimmed.isBlank()) {
+                "$imageBlock\n"
+            } else {
+                "$trimmed\n\n$imageBlock\n"
+            }
+            return updated to AddImagesResult(
+                addedCount = accepted.size,
+                skippedDueToLimit = skipped,
+                totalCount = existingCount + accepted.size
+            )
         }
     }
 }

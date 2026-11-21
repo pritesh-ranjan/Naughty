@@ -2,6 +2,7 @@ package com.example.naughty.ui.editor
 
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -117,6 +118,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import com.example.naughty.util.ImageOptimizer
 import com.example.naughty.util.ImageTextExtractor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -201,8 +203,19 @@ fun NoteEditorScreen(
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val attachedImages = remember(uiState.content) {
+        EditorBlockParser.extractImages(uiState.content)
+    }
+    var pendingAutoScrollToImages by remember(noteId) { mutableStateOf(false) }
     val isDark = isAppInDarkTheme()
     val scrollState = rememberScrollState()
+
+    LaunchedEffect(attachedImages.size, pendingAutoScrollToImages) {
+        if (pendingAutoScrollToImages && attachedImages.isNotEmpty()) {
+            pendingAutoScrollToImages = false
+            scrollState.animateScrollTo(scrollState.maxValue)
+        }
+    }
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
     val activity = remember(context) { context.findFragmentActivity() }
@@ -315,18 +328,10 @@ fun NoteEditorScreen(
     }
 
 
-    val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            coroutineScope.launch {
-                val optimizedFile = com.example.naughty.util.ImageOptimizer.optimizeAndSave(context, uri)
-                if (optimizedFile != null) {
-                    viewModel.addImage("file://${optimizedFile.absolutePath}")
-                }
-            }
-        }
-    }
+    val launchImagePicker = rememberNoteImagePickerLauncher(
+        viewModel = viewModel,
+        onImagesAdded = { pendingAutoScrollToImages = true }
+    )
 
     var isExtractingText by remember { mutableStateOf(false) }
 
@@ -1242,42 +1247,20 @@ fun NoteEditorScreen(
                     }
 
                     // Attached Images Section
-                    val attachedImages = remember(uiState.content) {
-                        val regex = Regex("!\\[.*?\\]\\((.*?)\\)")
-                        regex.findAll(uiState.content).map { it.groupValues[1] }.toList()
-                    }
-
-                    attachedImages.forEach { imageUri ->
-                        Spacer(modifier = Modifier.height(14.dp))
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(210.dp)
-                                .clip(RoundedCornerShape(18.dp))
-                                .clickable { fullscreenImageUri = imageUri }
-                        ) {
-                            AttachedImageThumbnail(
-                                imageRef = imageUri,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                            IconButton(
-                                onClick = { imageToDelete = imageUri },
-                                modifier = Modifier
-                                    .align(Alignment.TopEnd)
-                                    .padding(8.dp)
-                                    .size(30.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.Black.copy(alpha = 0.55f))
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Delete,
-                                    contentDescription = "Delete image",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        }
-                    }
+                    AttachedImagesSection(
+                        attachedImages = attachedImages,
+                        headerColor = currentTheme.textSecondary,
+                        singleHeight = 210.dp,
+                        gridHeight = 150.dp,
+                        singleCornerRadius = 18.dp,
+                        gridCornerRadius = 16.dp,
+                        deleteButtonSize = 30.dp,
+                        deleteIconSize = 16.dp,
+                        topSpacing = 14.dp,
+                        gridSpacing = 10.dp,
+                        onImageClick = { fullscreenImageUri = it },
+                        onDeleteClick = { imageToDelete = it }
+                    )
 
                     // Attached Voice Notes Section (WhatsApp-style Opus player)
                     val attachedVoiceNotes = remember(uiState.content) {
@@ -1391,7 +1374,7 @@ fun NoteEditorScreen(
                                 leadingIcon = { Icon(Icons.Outlined.Image, null) },
                                 onClick = {
                                     showAddBlockMenu = false
-                                    imagePickerLauncher.launch("image/*")
+                                    launchImagePicker()
                                 }
                             )
                             DropdownMenuItem(
@@ -1502,15 +1485,17 @@ fun NoteEditorScreen(
                         )
                     }
 
-                    // Image button: launches real image picker
+                    // Image button: launches real multi-image picker
                     IconButton(
-                        onClick = { imagePickerLauncher.launch("image/*") },
+                        onClick = { launchImagePicker() },
                         modifier = Modifier.size(34.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.Image,
                             contentDescription = "Attach image",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                alpha = if (attachedImages.size >= ImageOptimizer.MAX_IMAGES_PER_NOTE) 0.38f else 1f
+                            ),
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -2565,5 +2550,225 @@ private fun LockedNoteBarrier(
         }
     }
 }
+
+/**
+ * Registers single and multi-select Android Photo Picker launchers that respect
+ * [ImageOptimizer.MAX_IMAGES_PER_NOTE] across repeated picks and save images with fallback.
+ */
+@Composable
+fun rememberNoteImagePickerLauncher(
+    viewModel: NoteEditorViewModel,
+    onImagesAdded: (Int) -> Unit = {}
+): () -> Unit {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+
+    val handlePickedImageUris: (List<Uri>) -> Unit = { uris ->
+        if (uris.isNotEmpty()) {
+            val remaining = viewModel.getRemainingImageSlots()
+            if (remaining <= 0) {
+                Toast.makeText(
+                    context,
+                    "Maximum ${ImageOptimizer.MAX_IMAGES_PER_NOTE} images per note reached",
+                    Toast.LENGTH_SHORT
+                ).show()
+            } else {
+                val urisToProcess = uris.take(remaining)
+                val truncatedByPicker = (uris.size - urisToProcess.size).coerceAtLeast(0)
+                coroutineScope.launch {
+                    val savedUris = urisToProcess.mapNotNull { uri ->
+                        ImageOptimizer.saveImageWithFallback(context, uri)
+                            ?.let { "file://${it.absolutePath}" }
+                    }
+                    val failedCount = urisToProcess.size - savedUris.size
+                    val result = viewModel.addImages(savedUris)
+                    val totalSkipped = truncatedByPicker + result.skippedDueToLimit
+                    when {
+                        result.addedCount > 0 && totalSkipped > 0 -> {
+                            Toast.makeText(
+                                context,
+                                "Added ${result.addedCount} photo(s). Limit of ${ImageOptimizer.MAX_IMAGES_PER_NOTE} per note reached.",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                        result.addedCount == 0 && totalSkipped > 0 -> {
+                            Toast.makeText(
+                                context,
+                                "Maximum ${ImageOptimizer.MAX_IMAGES_PER_NOTE} images per note reached",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                        failedCount > 0 -> {
+                            Toast.makeText(
+                                context,
+                                "Could not attach $failedCount image(s)",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
+                    if (result.addedCount > 0) {
+                        onImagesAdded(result.addedCount)
+                    }
+                }
+            }
+        }
+    }
+
+    val multiImagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickMultipleVisualMedia(
+            maxItems = ImageOptimizer.MAX_IMAGES_PER_NOTE
+        )
+    ) { uris: List<Uri> ->
+        handlePickedImageUris(uris)
+    }
+
+    val singleImagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            handlePickedImageUris(listOf(uri))
+        }
+    }
+
+    return {
+        val remaining = viewModel.getRemainingImageSlots()
+        if (remaining <= 0) {
+            Toast.makeText(
+                context,
+                "Maximum ${ImageOptimizer.MAX_IMAGES_PER_NOTE} images per note reached",
+                Toast.LENGTH_SHORT
+            ).show()
+        } else {
+            viewModel.saveNow()
+            if (remaining == 1) {
+                singleImagePickerLauncher.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                )
+            } else {
+                multiImagePickerLauncher.launch(
+                    PickVisualMediaRequest(
+                        mediaType = ActivityResultContracts.PickVisualMedia.ImageOnly,
+                        maxItems = remaining
+                    )
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Renders attached note images: single full-width card when 1 image is attached,
+ * or a compact 2-column grid with an N/10 counter header for 2-10 images.
+ */
+@Composable
+fun AttachedImagesSection(
+    attachedImages: List<String>,
+    headerColor: Color,
+    singleHeight: Dp,
+    gridHeight: Dp,
+    singleCornerRadius: Dp,
+    gridCornerRadius: Dp,
+    deleteButtonSize: Dp,
+    deleteIconSize: Dp,
+    topSpacing: Dp,
+    gridSpacing: Dp,
+    onImageClick: (String) -> Unit,
+    onDeleteClick: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (attachedImages.isEmpty()) return
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        Spacer(modifier = Modifier.height(topSpacing))
+        Text(
+            text = "Attached photos (${attachedImages.size}/${ImageOptimizer.MAX_IMAGES_PER_NOTE})",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = headerColor,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+
+        if (attachedImages.size == 1) {
+            val imageUri = attachedImages[0]
+            AttachedImageCard(
+                imageUri = imageUri,
+                cornerRadius = singleCornerRadius,
+                deleteButtonSize = deleteButtonSize,
+                deleteIconSize = deleteIconSize,
+                onImageClick = { onImageClick(imageUri) },
+                onDeleteClick = { onDeleteClick(imageUri) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(singleHeight)
+            )
+        } else {
+            val rows = attachedImages.chunked(2)
+            Column(verticalArrangement = Arrangement.spacedBy(gridSpacing)) {
+                rows.forEach { rowImages ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(gridSpacing)
+                    ) {
+                        rowImages.forEach { imageUri ->
+                            AttachedImageCard(
+                                imageUri = imageUri,
+                                cornerRadius = gridCornerRadius,
+                                deleteButtonSize = deleteButtonSize,
+                                deleteIconSize = deleteIconSize,
+                                onImageClick = { onImageClick(imageUri) },
+                                onDeleteClick = { onDeleteClick(imageUri) },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(gridHeight)
+                            )
+                        }
+                        if (rowImages.size == 1) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AttachedImageCard(
+    imageUri: String,
+    cornerRadius: Dp,
+    deleteButtonSize: Dp,
+    deleteIconSize: Dp,
+    onImageClick: () -> Unit,
+    onDeleteClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(cornerRadius))
+            .clickable(onClick = onImageClick)
+    ) {
+        AttachedImageThumbnail(
+            imageRef = imageUri,
+            modifier = Modifier.fillMaxSize()
+        )
+        IconButton(
+            onClick = onDeleteClick,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(8.dp)
+                .size(deleteButtonSize)
+                .clip(CircleShape)
+                .background(Color.Black.copy(alpha = 0.55f))
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Delete,
+                contentDescription = "Delete image",
+                tint = Color.White,
+                modifier = Modifier.size(deleteIconSize)
+            )
+        }
+    }
+}
+
 
 

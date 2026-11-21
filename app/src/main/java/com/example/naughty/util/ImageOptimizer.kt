@@ -11,8 +11,23 @@ import java.io.FileOutputStream
 import java.util.UUID
 
 object ImageOptimizer {
+    const val MAX_IMAGES_PER_NOTE = 10
     private const val MAX_DIMENSION = 1600
     private const val COMPRESSION_QUALITY = 85
+
+    internal fun calculateInSampleSize(
+        rawWidth: Int,
+        rawHeight: Int,
+        maxDimension: Int = MAX_DIMENSION
+    ): Int {
+        var sampleSize = 1
+        var maxDim = maxOf(rawWidth, rawHeight)
+        while (maxDim > maxDimension * 1.5) {
+            sampleSize *= 2
+            maxDim /= 2
+        }
+        return sampleSize
+    }
 
     /**
      * Reads an image stream from [sourceUri], calculates [BitmapFactory.Options.inSampleSize]
@@ -23,25 +38,22 @@ object ImageOptimizer {
      */
     suspend fun optimizeAndSave(context: Context, sourceUri: Uri): File? = withContext(Dispatchers.IO) {
         try {
-            // 1. Read bounds only (zero bitmap allocation)
+            // 1. Read bounds only (zero bitmap allocation); decodeStream returns null by design here
             val boundsOptions = BitmapFactory.Options().apply {
                 inJustDecodeBounds = true
             }
-            context.contentResolver.openInputStream(sourceUri)?.use { stream ->
+            val boundsStream = context.contentResolver.openInputStream(sourceUri)
+                ?: return@withContext null
+            boundsStream.use { stream ->
                 BitmapFactory.decodeStream(stream, null, boundsOptions)
-            } ?: return@withContext null
+            }
 
             val rawWidth = boundsOptions.outWidth
             val rawHeight = boundsOptions.outHeight
             if (rawWidth <= 0 || rawHeight <= 0) return@withContext null
 
             // 2. Calculate optimal inSampleSize as a power of 2
-            var sampleSize = 1
-            var maxDim = maxOf(rawWidth, rawHeight)
-            while (maxDim > MAX_DIMENSION * 1.5) {
-                sampleSize *= 2
-                maxDim /= 2
-            }
+            val sampleSize = calculateInSampleSize(rawWidth, rawHeight, MAX_DIMENSION)
 
             // 3. Decode sampled bitmap into ARGB_8888 or RGB_565
             val decodeOptions = BitmapFactory.Options().apply {
@@ -80,6 +92,40 @@ object ImageOptimizer {
             finalBitmap.recycle()
 
             targetFile
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Optimizes and saves [sourceUri], falling back to a direct stream copy if decoding fails
+     * (e.g., for uncommon formats or animated GIFs/WebPs).
+     */
+    suspend fun saveImageWithFallback(context: Context, sourceUri: Uri): File? = withContext(Dispatchers.IO) {
+        val optimized = optimizeAndSave(context, sourceUri)
+        if (optimized != null) return@withContext optimized
+
+        try {
+            val imagesDir = File(context.filesDir, "note_images").apply { mkdirs() }
+            val mimeType = try {
+                context.contentResolver.getType(sourceUri)
+            } catch (_: Exception) {
+                null
+            }
+            val ext = when (mimeType) {
+                "image/png" -> "png"
+                "image/webp" -> "webp"
+                "image/gif" -> "gif"
+                else -> "jpg"
+            }
+            val fileName = "img_${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(6)}.$ext"
+            val destFile = File(imagesDir, fileName)
+            context.contentResolver.openInputStream(sourceUri)?.use { input ->
+                destFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            } ?: return@withContext null
+            destFile
         } catch (_: Exception) {
             null
         }

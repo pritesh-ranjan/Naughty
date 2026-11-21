@@ -150,6 +150,7 @@ class MainActivity : FragmentActivity() {
 
                             ShareImageOptionSheet(
                                 imageUris = imageShare.uris,
+                                totalReceivedCount = imageShare.totalReceivedCount,
                                 isProcessing = isProcessingImageShare,
                                 processingText = processingText,
                                 onSelectMode = { mode ->

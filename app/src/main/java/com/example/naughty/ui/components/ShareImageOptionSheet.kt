@@ -47,6 +47,7 @@ import com.example.naughty.util.ImageShareMode
 @Composable
 fun ShareImageOptionSheet(
     imageUris: List<Uri>,
+    totalReceivedCount: Int = imageUris.size,
     isProcessing: Boolean = false,
     processingText: String = "",
     onSelectMode: (ImageShareMode) -> Unit,
@@ -54,7 +55,11 @@ fun ShareImageOptionSheet(
 ) {
     OneUiBottomSheet(
         title = "Save Shared Image",
-        subtitle = if (imageUris.size == 1) "1 image received" else "${imageUris.size} images received",
+        subtitle = when {
+            totalReceivedCount > imageUris.size -> "${imageUris.size} of $totalReceivedCount images selected (max ${imageUris.size} per note)"
+            imageUris.size == 1 -> "1 image received"
+            else -> "${imageUris.size} images received"
+        },
         onDismiss = { if (!isProcessing) onDismiss() }
     ) {
         Column(

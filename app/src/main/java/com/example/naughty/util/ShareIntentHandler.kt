@@ -27,7 +27,8 @@ enum class ImageShareMode {
 data class PendingImageShare(
     val uris: List<Uri>,
     val subject: String?,
-    val text: String?
+    val text: String?,
+    val totalReceivedCount: Int = uris.size
 )
 
 enum class AudioShareMode {
@@ -187,11 +188,12 @@ object ShareIntentHandler {
         text: String?,
         localImageUris: List<String>
     ): ParsedSharedNote? {
-        if (localImageUris.isEmpty()) {
+        val cappedUris = localImageUris.take(ImageOptimizer.MAX_IMAGES_PER_NOTE)
+        if (cappedUris.isEmpty()) {
             return parseTextContent(subject, text)
         }
 
-        val imageMarkdown = localImageUris.joinToString("\n\n") { "![Image]($it)" }
+        val imageMarkdown = cappedUris.joinToString("\n\n") { "![Image]($it)" }
         val cleanText = text?.trim().orEmpty()
         val cleanSubject = subject?.trim().orEmpty()
 
@@ -204,8 +206,8 @@ object ShareIntentHandler {
         val title = when {
             cleanSubject.isNotBlank() -> cleanSubject
             cleanText.isNotBlank() -> cleanTitleFromText(cleanText)
-            localImageUris.size == 1 -> "Photo note"
-            else -> "${localImageUris.size} Photos"
+            cappedUris.size == 1 -> "Photo note"
+            else -> "${cappedUris.size} Photos"
         }
 
         return ParsedSharedNote(title = title, content = content, cardType = "modular")
@@ -221,10 +223,11 @@ object ShareIntentHandler {
         val cleanSubject = subject?.trim().orEmpty()
         val cleanAccompanying = accompanyingText?.trim().orEmpty()
         val cleanOcr = ocrText?.trim().orEmpty()
+        val cappedImageUris = savedImageFileUris.take(ImageOptimizer.MAX_IMAGES_PER_NOTE)
 
         return when (mode) {
             ImageShareMode.IMAGE_ONLY -> {
-                formatNoteWithImages(cleanSubject, cleanAccompanying, savedImageFileUris)
+                formatNoteWithImages(cleanSubject, cleanAccompanying, cappedImageUris)
             }
             ImageShareMode.OCR_ONLY -> {
                 if (cleanOcr.isNotBlank()) {
@@ -242,7 +245,7 @@ object ShareIntentHandler {
                     ParsedSharedNote(title = title, content = fullContent, cardType = cardType)
                 } else {
                     // Fallback if no text detected: preserve image or accompanying text
-                    formatNoteWithImages(cleanSubject, cleanAccompanying, savedImageFileUris)
+                    formatNoteWithImages(cleanSubject, cleanAccompanying, cappedImageUris)
                         ?: parseTextContent(cleanSubject, cleanAccompanying)
                 }
             }
@@ -253,7 +256,7 @@ object ShareIntentHandler {
                     cleanAccompanying.isNotBlank() -> cleanAccompanying
                     else -> ""
                 }
-                val imageMarkdown = savedImageFileUris.joinToString("\n\n") { "![Image]($it)" }
+                val imageMarkdown = cappedImageUris.joinToString("\n\n") { "![Image]($it)" }
                 val fullContent = when {
                     textPart.isNotBlank() && imageMarkdown.isNotBlank() -> "$textPart\n\n$imageMarkdown"
                     imageMarkdown.isNotBlank() -> imageMarkdown
@@ -264,10 +267,10 @@ object ShareIntentHandler {
                     cleanSubject
                 } else if (textPart.isNotBlank()) {
                     cleanTitleFromText(textPart)
-                } else if (savedImageFileUris.size == 1) {
+                } else if (cappedImageUris.size == 1) {
                     "Photo note"
                 } else {
-                    "${savedImageFileUris.size} Photos"
+                    "${cappedImageUris.size} Photos"
                 }
                 val cardType = detectCardType(fullContent)
                 ParsedSharedNote(title = title, content = fullContent, cardType = cardType)
@@ -368,37 +371,17 @@ object ShareIntentHandler {
             ?: intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()
             ?: intent.clipData?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString()
 
-        return PendingImageShare(uris = uris, subject = subject, text = text)
+        val cappedUris = uris.take(ImageOptimizer.MAX_IMAGES_PER_NOTE)
+        return PendingImageShare(
+            uris = cappedUris,
+            subject = subject,
+            text = text,
+            totalReceivedCount = uris.size
+        )
     }
 
     suspend fun copyUriToInternalStorage(context: Context, uri: Uri): File? {
-        val optimized = ImageOptimizer.optimizeAndSave(context, uri)
-        if (optimized != null) return optimized
-
-        return try {
-            val imagesDir = File(context.filesDir, "note_images").apply { mkdirs() }
-            val mimeType = try {
-                context.contentResolver.getType(uri)
-            } catch (_: Exception) {
-                null
-            }
-            val ext = when (mimeType) {
-                "image/png" -> "png"
-                "image/webp" -> "webp"
-                "image/gif" -> "gif"
-                else -> "jpg"
-            }
-            val fileName = "img_${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(6)}.$ext"
-            val destFile = File(imagesDir, fileName)
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                destFile.outputStream().use { output ->
-                    input.copyTo(output)
-                }
-            } ?: return null
-            destFile
-        } catch (_: Exception) {
-            null
-        }
+        return ImageOptimizer.saveImageWithFallback(context, uri)
     }
 
     suspend fun processImageShare(
@@ -407,15 +390,16 @@ object ShareIntentHandler {
         mode: ImageShareMode,
         repository: NoteRepository
     ): NoteMetadata? = withContext(Dispatchers.IO) {
+        val targetUris = share.uris.take(ImageOptimizer.MAX_IMAGES_PER_NOTE)
         val savedImageFileUris = if (mode == ImageShareMode.IMAGE_ONLY || mode == ImageShareMode.BOTH) {
-            share.uris.mapNotNull { uri ->
+            targetUris.mapNotNull { uri ->
                 copyUriToInternalStorage(context, uri)?.let { "file://${it.absolutePath}" }
             }
         } else emptyList()
 
         val ocrText = if (mode == ImageShareMode.OCR_ONLY || mode == ImageShareMode.BOTH) {
             val texts = mutableListOf<String>()
-            for (uri in share.uris) {
+            for (uri in targetUris) {
                 val res = ImageTextExtractor.extractText(context, uri)
                 res.getOrNull()?.trim()?.takeIf { it.isNotBlank() }?.let { texts.add(it) }
             }
@@ -424,7 +408,7 @@ object ShareIntentHandler {
 
         // In OCR_ONLY mode, if no text was detected, fall back to copying image to storage so no data is lost
         val fallbackImages = if (mode == ImageShareMode.OCR_ONLY && (ocrText.isNullOrBlank())) {
-            share.uris.mapNotNull { uri ->
+            targetUris.mapNotNull { uri ->
                 copyUriToInternalStorage(context, uri)?.let { "file://${it.absolutePath}" }
             }
         } else savedImageFileUris

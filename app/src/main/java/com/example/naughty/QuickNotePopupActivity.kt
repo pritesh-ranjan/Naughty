@@ -104,6 +104,7 @@ import com.example.naughty.ui.components.FullscreenImageViewer
 import com.example.naughty.ui.components.VoiceNotePlayer
 import com.example.naughty.ui.components.VoiceRecordingSheet
 import com.example.naughty.ui.components.paperBackground
+import com.example.naughty.ui.editor.AttachedImagesSection
 import com.example.naughty.ui.editor.BulletTextHelper
 import com.example.naughty.ui.editor.ChecklistItemRow
 import com.example.naughty.ui.editor.EditorBlock
@@ -114,7 +115,7 @@ import com.example.naughty.ui.editor.NoteEditorViewModel
 import com.example.naughty.ui.editor.ReminderBottomSheet
 import com.example.naughty.ui.editor.TextBlockItem
 import com.example.naughty.ui.editor.ThemeSelectionSheet
-import com.example.naughty.ui.notelist.AttachedImageThumbnail
+import com.example.naughty.ui.editor.rememberNoteImagePickerLauncher
 import com.example.naughty.ui.oneui.theme.OneUi
 import com.example.naughty.ui.oneui.theme.OneUiTheme
 import com.example.naughty.ui.theme.AmoledBlack
@@ -416,8 +417,19 @@ fun QuickNotePopupScreen(
     BackHandler { onDismiss() }
 
     val uiState by viewModel.uiState.collectAsState()
+    val attachedImages = remember(uiState.content) {
+        EditorBlockParser.extractImages(uiState.content)
+    }
+    var pendingAutoScrollToImages by remember(noteId) { mutableStateOf(false) }
     val isDark = isAppInDarkTheme()
     val scrollState = rememberScrollState()
+
+    LaunchedEffect(attachedImages.size, pendingAutoScrollToImages) {
+        if (pendingAutoScrollToImages && attachedImages.isNotEmpty()) {
+            pendingAutoScrollToImages = false
+            scrollState.animateScrollTo(scrollState.maxValue)
+        }
+    }
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
     val activity = context as? FragmentActivity
@@ -471,18 +483,10 @@ fun QuickNotePopupScreen(
         NoteThemeRegistry.getTheme(uiState.colorTheme, isDark)
     }
 
-    val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            coroutineScope.launch {
-                val optimizedFile = ImageOptimizer.optimizeAndSave(context, uri)
-                if (optimizedFile != null) {
-                    viewModel.addImage("file://${optimizedFile.absolutePath}")
-                }
-            }
-        }
-    }
+    val launchImagePicker = rememberNoteImagePickerLauncher(
+        viewModel = viewModel,
+        onImagesAdded = { pendingAutoScrollToImages = true }
+    )
 
     var isExtractingText by remember { mutableStateOf(false) }
     val ocrImagePickerLauncher = rememberLauncherForActivityResult(
@@ -801,41 +805,20 @@ fun QuickNotePopupScreen(
                         }
 
                         // Attached images
-                        val attachedImages = remember(uiState.content) {
-                            val regex = Regex("!\\[.*?\\]\\((.*?)\\)")
-                            regex.findAll(uiState.content).map { it.groupValues[1] }.toList()
-                        }
-                        attachedImages.forEach { imageUri ->
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(140.dp)
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .clickable { fullscreenImageUri = imageUri }
-                            ) {
-                                AttachedImageThumbnail(
-                                    imageRef = imageUri,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                                IconButton(
-                                    onClick = { viewModel.removeImage(imageUri) },
-                                    modifier = Modifier
-                                        .align(Alignment.TopEnd)
-                                        .padding(6.dp)
-                                        .size(26.dp)
-                                        .clip(CircleShape)
-                                        .background(Color.Black.copy(alpha = 0.55f))
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.Delete,
-                                        contentDescription = "Delete image",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                }
-                            }
-                        }
+                        AttachedImagesSection(
+                            attachedImages = attachedImages,
+                            headerColor = currentTheme.textSecondary,
+                            singleHeight = 140.dp,
+                            gridHeight = 110.dp,
+                            singleCornerRadius = 14.dp,
+                            gridCornerRadius = 12.dp,
+                            deleteButtonSize = 26.dp,
+                            deleteIconSize = 14.dp,
+                            topSpacing = 10.dp,
+                            gridSpacing = 8.dp,
+                            onImageClick = { fullscreenImageUri = it },
+                            onDeleteClick = { viewModel.removeImage(it) }
+                        )
 
                         // Attached voice notes
                         val attachedVoiceNotes = remember(uiState.content) {
@@ -937,7 +920,7 @@ fun QuickNotePopupScreen(
                                                 leadingIcon = { Icon(Icons.Outlined.Image, null) },
                                                 onClick = {
                                                     showAddBlockMenu = false
-                                                    imagePickerLauncher.launch("image/*")
+                                                    launchImagePicker()
                                                 }
                                             )
                                             DropdownMenuItem(
@@ -1036,13 +1019,15 @@ fun QuickNotePopupScreen(
 
                                     // Image button
                                     IconButton(
-                                        onClick = { imagePickerLauncher.launch("image/*") },
+                                        onClick = { launchImagePicker() },
                                         modifier = Modifier.size(32.dp)
                                     ) {
                                         Icon(
                                             imageVector = Icons.Outlined.Image,
                                             contentDescription = "Attach image",
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                                alpha = if (attachedImages.size >= ImageOptimizer.MAX_IMAGES_PER_NOTE) 0.38f else 1f
+                                            ),
                                             modifier = Modifier.size(19.dp)
                                         )
                                     }
