@@ -230,7 +230,7 @@ class VideoShareProcessor(
                     return@launch
                 }
                 if (!metadata.isWithinDurationLimit) {
-                    failWith("Video exceeds the 1-minute maximum limit.")
+                    failWith("Video exceeds the 3-minute maximum limit.")
                     return@launch
                 }
 
@@ -632,7 +632,7 @@ class VideoShareProcessor(
     }
 
     companion object {
-        const val MAX_DURATION_MS = 60_500L
+        const val MAX_DURATION_MS = 180_500L
         const val MAX_LONG_EDGE_720P = 1280
         const val MAX_SHORT_EDGE_720P = 720
         private const val GRID_SIZE = 8

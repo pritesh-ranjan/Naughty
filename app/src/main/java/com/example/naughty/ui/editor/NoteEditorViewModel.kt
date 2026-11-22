@@ -65,8 +65,10 @@ class NoteEditorViewModel(
     private var bindingJob: Job? = null
     private val undoHistory = mutableListOf<String>()
     private val redoHistory = mutableListOf<String>()
+    private var preReorderContent: String? = null
 
     fun loadNote(noteId: String) {
+        preReorderContent = null
         bindingJob?.cancel()
         bindingJob = viewModelScope.launch {
             bindingRepository.getByNoteId(noteId).collect { bindings ->
@@ -373,6 +375,42 @@ class NoteEditorViewModel(
             }
         }
         updateBlocksInternal(currentBlocks)
+    }
+
+    fun beginChecklistReorder() {
+        preReorderContent = _uiState.value.content
+    }
+
+    fun moveChecklistBlock(fromIndex: Int, toIndex: Int): Boolean {
+        val reordered = reorderChecklistBlock(_uiState.value.blocks, fromIndex, toIndex) ?: return false
+        if (preReorderContent != null) {
+            val attachedImages = EditorBlockParser.extractImages(_uiState.value.content)
+            val attachedVoiceNotes = EditorBlockParser.extractVoiceNotes(_uiState.value.content)
+            val newContent = EditorBlockParser.toMarkdown(reordered, attachedImages, attachedVoiceNotes)
+            _uiState.value = _uiState.value.copy(
+                blocks = reordered,
+                content = newContent
+            )
+        } else {
+            updateBlocksInternal(reordered)
+        }
+        return true
+    }
+
+    fun finishChecklistReorder() {
+        val before = preReorderContent
+        preReorderContent = null
+        val current = _uiState.value.content
+        if (before != null && before != current) {
+            undoHistory.add(before)
+            if (undoHistory.size > 30) undoHistory.removeAt(0)
+            redoHistory.clear()
+            _uiState.value = _uiState.value.copy(
+                canUndo = undoHistory.isNotEmpty(),
+                canRedo = false
+            )
+            scheduleAutoSave()
+        }
     }
 
     fun updateTextBlock(blockId: String, newText: String) {

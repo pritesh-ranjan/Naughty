@@ -1,6 +1,7 @@
 package com.example.naughty.ui.oneui.components
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -42,8 +43,9 @@ fun OneUiFilledButton(
         color = if (enabled) containerColor else containerColor.copy(alpha = 0.4f)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 13.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
         ) {
             if (icon != null) {
                 Icon(
@@ -83,7 +85,8 @@ fun OneUiTonalButton(
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
         ) {
             if (icon != null) {
                 Icon(

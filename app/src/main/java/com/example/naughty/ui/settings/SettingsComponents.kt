@@ -127,7 +127,7 @@ fun AboutAndPrivacyDialog(
                 item {
                     OneUiListItem(
                         title = "On-Device AI",
-                        subtitle = "Google ML Kit OCR • Android SpeechRecognizer",
+                        subtitle = "ML Kit OCR • YAMNet • MiniLM-L6-v2 • SpeechRecognizer",
                         leading = OneUiLeading.IconBadge(Icons.Outlined.Info, OneUi.colors.badge.blue)
                     )
                 }

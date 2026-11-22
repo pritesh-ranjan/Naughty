@@ -37,9 +37,11 @@ class VideoShareProcessorTest {
         assertFalse(VideoShareProcessor.isWithinDurationLimit(-500L))
         assertTrue(VideoShareProcessor.isWithinDurationLimit(1_000L))
         assertTrue(VideoShareProcessor.isWithinDurationLimit(60_000L))
-        assertTrue(VideoShareProcessor.isWithinDurationLimit(60_500L))
-        assertFalse(VideoShareProcessor.isWithinDurationLimit(60_501L))
-        assertFalse(VideoShareProcessor.isWithinDurationLimit(95_000L))
+        assertTrue(VideoShareProcessor.isWithinDurationLimit(120_000L))
+        assertTrue(VideoShareProcessor.isWithinDurationLimit(180_000L))
+        assertTrue(VideoShareProcessor.isWithinDurationLimit(180_500L))
+        assertFalse(VideoShareProcessor.isWithinDurationLimit(180_501L))
+        assertFalse(VideoShareProcessor.isWithinDurationLimit(210_000L))
     }
 
     @Test

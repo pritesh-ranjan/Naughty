@@ -13,6 +13,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -82,8 +83,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
@@ -115,6 +123,9 @@ import com.example.naughty.ui.editor.NoteEditorViewModel
 import com.example.naughty.ui.editor.ReminderBottomSheet
 import com.example.naughty.ui.editor.TextBlockItem
 import com.example.naughty.ui.editor.ThemeSelectionSheet
+import com.example.naughty.ui.editor.canReorderChecklists
+import com.example.naughty.ui.editor.performChecklistReorderTickHaptic
+import com.example.naughty.ui.editor.rememberChecklistDragReorderState
 import com.example.naughty.ui.editor.rememberNoteImagePickerLauncher
 import com.example.naughty.ui.oneui.theme.OneUi
 import com.example.naughty.ui.oneui.theme.OneUiTheme
@@ -479,6 +490,39 @@ fun QuickNotePopupScreen(
         }
     }
 
+    val view = LocalView.current
+    val density = LocalDensity.current
+    val dragReorderState = rememberChecklistDragReorderState(
+        blocks = uiState.blocks,
+        onBeginReorder = { viewModel.beginChecklistReorder() },
+        onMoveChecklist = { fromIndex, toIndex -> viewModel.moveChecklistBlock(fromIndex, toIndex) },
+        onFinishReorder = { viewModel.finishChecklistReorder() },
+        onSwapHaptic = { performChecklistReorderTickHaptic(view) }
+    )
+
+    LaunchedEffect(uiState.blocks) {
+        dragReorderState.pruneMissingBlocks(uiState.blocks.map { it.id }.toSet())
+    }
+
+    LaunchedEffect(dragReorderState.isDragging) {
+        if (dragReorderState.isDragging) {
+            val edgeThresholdPx = with(density) { 56.dp.toPx() }
+            while (dragReorderState.isDragging) {
+                val step = dragReorderState.computeAutoScrollStep(edgeThresholdPx)
+                if (step != 0f) {
+                    scrollState.scrollBy(step)
+                    dragReorderState.refreshAfterScroll()
+                }
+                delay(16L)
+                dragReorderState.refreshAfterScroll()
+            }
+        }
+    }
+
+    DisposableEffect(noteId) {
+        onDispose { dragReorderState.endDrag() }
+    }
+
     val currentTheme = remember(uiState.colorTheme, isDark) {
         NoteThemeRegistry.getTheme(uiState.colorTheme, isDark)
     }
@@ -645,7 +689,8 @@ fun QuickNotePopupScreen(
                     Column(
                         modifier = Modifier
                             .weight(1f)
-                            .verticalScroll(scrollState)
+                            .onGloballyPositioned { dragReorderState.onViewportPositioned(it) }
+                            .verticalScroll(scrollState, enabled = !dragReorderState.isDragging)
                             .padding(horizontal = 16.dp, vertical = 4.dp)
                     ) {
                         // Title
@@ -704,84 +749,131 @@ fun QuickNotePopupScreen(
                         } else {
                             val blocks = uiState.blocks
                             val showEmptyPlaceholder = blocks.size == 1 && (blocks[0] as? EditorBlock.Text)?.text.isNullOrEmpty()
+                            val canReorderTodos = remember(blocks) { canReorderChecklists(blocks) }
 
-                            blocks.forEach { block ->
-                                key(block.id) {
-                                    when (block) {
-                                        is EditorBlock.Checklist -> {
-                                            ChecklistItemRow(
-                                                block = block,
-                                                currentTheme = currentTheme,
-                                                isRequestedFocus = requestFocusBlockId == block.id,
-                                                onFocusConsumed = { requestFocusBlockId = null },
-                                                onFocusChanged = { isFocused ->
-                                                    if (isFocused) {
-                                                        focusedBlockId = block.id
-                                                        lastFocusedBlockId = block.id
-                                                    } else if (focusedBlockId == block.id) {
-                                                        focusedBlockId = null
-                                                    }
-                                                },
-                                                onCheckedChange = { viewModel.toggleChecklistBlock(block.id) },
-                                                onTextChange = { newText ->
-                                                    viewModel.updateChecklistText(block.id, newText)
-                                                },
-                                                onNext = { currentText ->
-                                                    val newId = viewModel.handleEnterOnChecklist(block.id, currentText)
-                                                    requestFocusBlockId = newId
-                                                },
-                                                onBackspaceOnEmpty = {
-                                                    val targetFocusId = viewModel.deleteBlock(block.id)
-                                                    if (targetFocusId != null) {
-                                                        requestFocusBlockId = targetFocusId
-                                                    }
-                                                },
-                                                onDelete = {
-                                                    val targetFocusId = viewModel.deleteBlock(block.id)
-                                                    if (targetFocusId != null) {
-                                                        requestFocusBlockId = targetFocusId
-                                                    }
-                                                },
-                                                onReminderClick = {
-                                                    reminderTargetBlockId = block.id
-                                                    reminderInitialText = block.text
-                                                    reminderInitialTime = block.reminder?.timestampMillis
-                                                    isEditingNoteReminder = false
-                                                    showReminderSheet = true
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .onGloballyPositioned { dragReorderState.onContainerPositioned(it) }
+                            ) {
+                                blocks.forEach { block ->
+                                    key(block.id) {
+                                        val isDraggingThis = dragReorderState.draggingBlockId == block.id
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .zIndex(if (isDraggingThis) 10f else 0f)
+                                                .onPlaced { coords ->
+                                                    dragReorderState.onBlockPlaced(
+                                                        blockId = block.id,
+                                                        top = coords.positionInParent().y,
+                                                        height = coords.size.height.toFloat()
+                                                    )
                                                 }
-                                            )
-                                        }
-                                        is EditorBlock.Text -> {
-                                            TextBlockItem(
-                                                block = block,
-                                                currentTheme = currentTheme,
-                                                showPlaceholder = showEmptyPlaceholder,
-                                                isRequestedFocus = requestFocusBlockId == block.id,
-                                                requestedCursorPosition = if (requestFocusBlockId == block.id) requestFocusCursorPosition else null,
-                                                onFocusConsumed = {
-                                                    requestFocusBlockId = null
-                                                    requestFocusCursorPosition = null
-                                                },
-                                                onFocusChanged = { isFocused, cursorOffset ->
-                                                    if (isFocused) {
-                                                        focusedBlockId = block.id
-                                                        lastFocusedBlockId = block.id
-                                                        focusedCursorOffset = cursorOffset
-                                                    } else if (focusedBlockId == block.id) {
-                                                        focusedBlockId = null
+                                        ) {
+                                            when (block) {
+                                                is EditorBlock.Checklist -> {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .graphicsLayer {
+                                                                if (dragReorderState.draggingBlockId == block.id) {
+                                                                    translationY = dragReorderState.translationYFor(block.id)
+                                                                    scaleX = 1.02f
+                                                                    scaleY = 1.02f
+                                                                    shadowElevation = 12f
+                                                                    shape = RoundedCornerShape(10.dp)
+                                                                    clip = false
+                                                                }
+                                                            }
+                                                    ) {
+                                                        ChecklistItemRow(
+                                                            block = block,
+                                                            currentTheme = currentTheme,
+                                                            isRequestedFocus = requestFocusBlockId == block.id,
+                                                            onFocusConsumed = { requestFocusBlockId = null },
+                                                            onFocusChanged = { isFocused ->
+                                                                if (isFocused) {
+                                                                    focusedBlockId = block.id
+                                                                    lastFocusedBlockId = block.id
+                                                                } else if (focusedBlockId == block.id) {
+                                                                    focusedBlockId = null
+                                                                }
+                                                            },
+                                                            onCheckedChange = { viewModel.toggleChecklistBlock(block.id) },
+                                                            onTextChange = { newText ->
+                                                                viewModel.updateChecklistText(block.id, newText)
+                                                            },
+                                                            onNext = { currentText ->
+                                                                val newId = viewModel.handleEnterOnChecklist(block.id, currentText)
+                                                                requestFocusBlockId = newId
+                                                            },
+                                                            onBackspaceOnEmpty = {
+                                                                val targetFocusId = viewModel.deleteBlock(block.id)
+                                                                if (targetFocusId != null) {
+                                                                    requestFocusBlockId = targetFocusId
+                                                                }
+                                                            },
+                                                            onDelete = {
+                                                                val targetFocusId = viewModel.deleteBlock(block.id)
+                                                                if (targetFocusId != null) {
+                                                                    requestFocusBlockId = targetFocusId
+                                                                }
+                                                            },
+                                                            onReminderClick = {
+                                                                reminderTargetBlockId = block.id
+                                                                reminderInitialText = block.text
+                                                                reminderInitialTime = block.reminder?.timestampMillis
+                                                                isEditingNoteReminder = false
+                                                                showReminderSheet = true
+                                                            },
+                                                            canReorder = canReorderTodos,
+                                                            isDragging = isDraggingThis,
+                                                            onDragStart = { rootY ->
+                                                                dragReorderState.startDrag(block.id, rootY)
+                                                            },
+                                                            onDrag = { rootY ->
+                                                                dragReorderState.updateDrag(rootY)
+                                                            },
+                                                            onDragEnd = {
+                                                                dragReorderState.endDrag()
+                                                            }
+                                                        )
                                                     }
-                                                },
-                                                onTextChange = { newText ->
-                                                    viewModel.updateTextBlock(block.id, newText)
-                                                },
-                                                onReminderClick = { reminder ->
-                                                    reminderTargetBlockId = null
-                                                    reminderInitialText = reminder.displayText
-                                                    reminderInitialTime = reminder.timestampMillis
-                                                    isEditingNoteReminder = false
-                                                    showReminderSheet = true
                                                 }
-                                            )
+                                                is EditorBlock.Text -> {
+                                                    TextBlockItem(
+                                                        block = block,
+                                                        currentTheme = currentTheme,
+                                                        showPlaceholder = showEmptyPlaceholder,
+                                                        isRequestedFocus = requestFocusBlockId == block.id,
+                                                        requestedCursorPosition = if (requestFocusBlockId == block.id) requestFocusCursorPosition else null,
+                                                        onFocusConsumed = {
+                                                            requestFocusBlockId = null
+                                                            requestFocusCursorPosition = null
+                                                        },
+                                                        onFocusChanged = { isFocused, cursorOffset ->
+                                                            if (isFocused) {
+                                                                focusedBlockId = block.id
+                                                                lastFocusedBlockId = block.id
+                                                                focusedCursorOffset = cursorOffset
+                                                            } else if (focusedBlockId == block.id) {
+                                                                focusedBlockId = null
+                                                            }
+                                                        },
+                                                        onTextChange = { newText ->
+                                                            viewModel.updateTextBlock(block.id, newText)
+                                                        },
+                                                        onReminderClick = { reminder ->
+                                                            reminderTargetBlockId = null
+                                                            reminderInitialText = reminder.displayText
+                                                            reminderInitialTime = reminder.timestampMillis
+                                                            isEditingNoteReminder = false
+                                                            showReminderSheet = true
+                                                        }
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
                                 }

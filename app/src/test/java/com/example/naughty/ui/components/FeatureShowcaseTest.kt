@@ -39,8 +39,17 @@ class FeatureShowcaseTest {
     fun featureShowcaseItems_containsAllRequiredFeatures() {
         val items = getFeatureShowcaseItems()
 
-        // Verify all 11 items are present
-        assertTrue("Expected at least 9 showcase items, found ${items.size}", items.size >= 9)
+        // Verify all 10 flagship showcase items are present
+        assertEquals("Expected 10 flagship showcase items, found ${items.size}", 10, items.size)
+
+        // 0. Offline Video Summarizer (up to 3 minutes)
+        val videoItem = items.find { it.title.contains("Video", ignoreCase = true) }
+        assertTrue(
+            "Missing Offline Video Summarizer with 3-minute offline note generation",
+            videoItem != null &&
+                videoItem.description.contains("3 minutes", ignoreCase = true) &&
+                videoItem.description.contains("offline", ignoreCase = true)
+        )
 
         // 1. App binding
         assertTrue(
@@ -68,7 +77,6 @@ class FeatureShowcaseTest {
 
         // 5. Offline OCR within notes & via share
         val ocrItem = items.find { it.title.contains("OCR", ignoreCase = true) }
-        println("FOUND OCR ITEM: ${ocrItem?.title} | ${ocrItem?.description}")
         assertTrue(
             "Missing Offline OCR",
             ocrItem != null && (ocrItem.description.contains("share", ignoreCase = true) || ocrItem.description.contains("sharing", ignoreCase = true))
@@ -98,7 +106,19 @@ class FeatureShowcaseTest {
             items.any { it.title.contains("Lock", ignoreCase = true) }
         )
 
-        // Ensure "Floating Quick Notes" and "14 Themes" were removed as requested
+        // Ensure minor tweaks and previously excluded items are not listed as showcase cards
+        assertFalse(
+            "Minor todo reorder item should not be a showcase card",
+            items.any { it.title.contains("reorder", ignoreCase = true) || it.description.contains("reorder", ignoreCase = true) }
+        )
+        assertFalse(
+            "Minor haptic tweak should not be a showcase card",
+            items.any { it.title.contains("haptic", ignoreCase = true) || it.description.contains("haptic", ignoreCase = true) }
+        )
+        assertFalse(
+            "Minor image limit tweak should not be a showcase card",
+            items.any { it.title.contains("10 image", ignoreCase = true) || it.description.contains("10 image", ignoreCase = true) }
+        )
         assertFalse(
             "Floating Quick Notes should be removed",
             items.any { it.title.contains("Floating", ignoreCase = true) }

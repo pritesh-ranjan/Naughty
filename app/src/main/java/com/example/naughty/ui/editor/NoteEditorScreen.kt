@@ -5,7 +5,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,8 +29,12 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -131,6 +137,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -138,6 +145,15 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -385,6 +401,39 @@ fun NoteEditorScreen(
         MentionVisualTransformation(currentTheme.accent)
     }
 
+    val view = LocalView.current
+    val density = LocalDensity.current
+    val dragReorderState = rememberChecklistDragReorderState(
+        blocks = uiState.blocks,
+        onBeginReorder = { viewModel.beginChecklistReorder() },
+        onMoveChecklist = { fromIndex, toIndex -> viewModel.moveChecklistBlock(fromIndex, toIndex) },
+        onFinishReorder = { viewModel.finishChecklistReorder() },
+        onSwapHaptic = { performChecklistReorderTickHaptic(view) }
+    )
+
+    LaunchedEffect(uiState.blocks) {
+        dragReorderState.pruneMissingBlocks(uiState.blocks.map { it.id }.toSet())
+    }
+
+    LaunchedEffect(dragReorderState.isDragging) {
+        if (dragReorderState.isDragging) {
+            val edgeThresholdPx = with(density) { 64.dp.toPx() }
+            while (dragReorderState.isDragging) {
+                val step = dragReorderState.computeAutoScrollStep(edgeThresholdPx)
+                if (step != 0f) {
+                    scrollState.scrollBy(step)
+                    dragReorderState.refreshAfterScroll()
+                }
+                delay(16L)
+                dragReorderState.refreshAfterScroll()
+            }
+        }
+    }
+
+    DisposableEffect(noteId) {
+        onDispose { dragReorderState.endDrag() }
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -393,6 +442,9 @@ fun NoteEditorScreen(
                 val touchSlop = viewConfiguration.touchSlop
                 awaitEachGesture {
                     val down = awaitFirstDown(pass = PointerEventPass.Initial, requireUnconsumed = false)
+                    if (dragReorderState.isDragging) {
+                        return@awaitEachGesture
+                    }
                     val tb = toolbarBounds
                     if (tb != null && down.position.y >= tb.top - 16f && down.position.x in (tb.left - 16f)..(tb.right + 16f)) {
                         // Touch originated on or around the floating bottom toolbar -
@@ -407,6 +459,9 @@ fun NoteEditorScreen(
 
                     while (true) {
                         val event = awaitPointerEvent(pass = PointerEventPass.Initial)
+                        if (dragReorderState.isDragging) {
+                            break
+                        }
                         val change = event.changes.firstOrNull { it.id == pointerId } ?: break
 
                         if (!change.pressed) {
@@ -839,7 +894,8 @@ fun NoteEditorScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .verticalScroll(scrollState)
+                        .onGloballyPositioned { dragReorderState.onViewportPositioned(it) }
+                        .verticalScroll(scrollState, enabled = !dragReorderState.isDragging)
                         .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
                 if (uiState.isRawMarkdownMode) {
@@ -1132,96 +1188,143 @@ fun NoteEditorScreen(
                             // Unified Document Blocks Canvas
                             val blocks = uiState.blocks
                             val showEmptyPlaceholder = blocks.size == 1 && (blocks[0] as? EditorBlock.Text)?.text.isNullOrEmpty()
+                            val canReorderTodos = remember(blocks) { canReorderChecklists(blocks) }
 
-                            blocks.forEachIndexed { index, block ->
-                                key(block.id) {
-                                    when (block) {
-                                        is EditorBlock.Checklist -> {
-                                            ChecklistItemRow(
-                                                block = block,
-                                                currentTheme = currentTheme,
-                                                isRequestedFocus = requestFocusBlockId == block.id,
-                                                onFocusConsumed = { requestFocusBlockId = null },
-                                                onFocusChanged = { isFocused ->
-                                                    if (isFocused) {
-                                                        focusedBlockId = block.id
-                                                        lastFocusedBlockId = block.id
-                                                    } else if (focusedBlockId == block.id) {
-                                                        focusedBlockId = null
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .onGloballyPositioned { dragReorderState.onContainerPositioned(it) }
+                            ) {
+                                blocks.forEachIndexed { index, block ->
+                                    key(block.id) {
+                                        val isDraggingThis = dragReorderState.draggingBlockId == block.id
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .zIndex(if (isDraggingThis) 10f else 0f)
+                                                .onPlaced { coords ->
+                                                    dragReorderState.onBlockPlaced(
+                                                        blockId = block.id,
+                                                        top = coords.positionInParent().y,
+                                                        height = coords.size.height.toFloat()
+                                                    )
+                                                }
+                                        ) {
+                                            when (block) {
+                                                is EditorBlock.Checklist -> {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .graphicsLayer {
+                                                                if (dragReorderState.draggingBlockId == block.id) {
+                                                                    translationY = dragReorderState.translationYFor(block.id)
+                                                                    scaleX = 1.02f
+                                                                    scaleY = 1.02f
+                                                                    shadowElevation = 12f
+                                                                    shape = RoundedCornerShape(10.dp)
+                                                                    clip = false
+                                                                }
+                                                            }
+                                                    ) {
+                                                        ChecklistItemRow(
+                                                            block = block,
+                                                            currentTheme = currentTheme,
+                                                            isRequestedFocus = requestFocusBlockId == block.id,
+                                                            onFocusConsumed = { requestFocusBlockId = null },
+                                                            onFocusChanged = { isFocused ->
+                                                                if (isFocused) {
+                                                                    focusedBlockId = block.id
+                                                                    lastFocusedBlockId = block.id
+                                                                } else if (focusedBlockId == block.id) {
+                                                                    focusedBlockId = null
+                                                                }
+                                                            },
+                                                            onCheckedChange = { viewModel.toggleChecklistBlock(block.id) },
+                                                            onTextChange = { newText ->
+                                                                viewModel.updateChecklistText(block.id, newText)
+                                                            },
+                                                            onNext = { currentText ->
+                                                                val newId = viewModel.handleEnterOnChecklist(block.id, currentText)
+                                                                requestFocusBlockId = newId
+                                                            },
+                                                            onBackspaceOnEmpty = {
+                                                                val targetFocusId = viewModel.deleteBlock(block.id)
+                                                                if (targetFocusId != null) {
+                                                                    requestFocusBlockId = targetFocusId
+                                                                }
+                                                            },
+                                                            onDelete = {
+                                                                val targetFocusId = viewModel.deleteBlock(block.id)
+                                                                if (targetFocusId != null) {
+                                                                    requestFocusBlockId = targetFocusId
+                                                                }
+                                                            },
+                                                            onReminderClick = {
+                                                                activeSelectionContext = null
+                                                                reminderTargetBlockId = block.id
+                                                                reminderInitialText = block.text
+                                                                reminderInitialTime = block.reminder?.timestampMillis
+                                                                isEditingNoteReminder = false
+                                                                showReminderSheet = true
+                                                            },
+                                                            onMentionTrigger = { trigger ->
+                                                                activeMentionBlockId = block.id
+                                                                activeMentionTrigger = trigger
+                                                            },
+                                                            visualTransformation = reminderVisualTransformation,
+                                                            canReorder = canReorderTodos,
+                                                            isDragging = isDraggingThis,
+                                                            onDragStart = { rootY ->
+                                                                dragReorderState.startDrag(block.id, rootY)
+                                                            },
+                                                            onDrag = { rootY ->
+                                                                dragReorderState.updateDrag(rootY)
+                                                            },
+                                                            onDragEnd = {
+                                                                dragReorderState.endDrag()
+                                                            }
+                                                        )
                                                     }
-                                                },
-                                                onCheckedChange = { viewModel.toggleChecklistBlock(block.id) },
-                                                onTextChange = { newText ->
-                                                    viewModel.updateChecklistText(block.id, newText)
-                                                },
-                                                onNext = { currentText ->
-                                                    val newId = viewModel.handleEnterOnChecklist(block.id, currentText)
-                                                    requestFocusBlockId = newId
-                                                },
-                                                onBackspaceOnEmpty = {
-                                                    val targetFocusId = viewModel.deleteBlock(block.id)
-                                                    if (targetFocusId != null) {
-                                                        requestFocusBlockId = targetFocusId
-                                                    }
-                                                },
-                                                onDelete = {
-                                                    val targetFocusId = viewModel.deleteBlock(block.id)
-                                                    if (targetFocusId != null) {
-                                                        requestFocusBlockId = targetFocusId
-                                                    }
-                                                },
-                                                onReminderClick = {
-                                                    activeSelectionContext = null
-                                                    reminderTargetBlockId = block.id
-                                                    reminderInitialText = block.text
-                                                    reminderInitialTime = block.reminder?.timestampMillis
-                                                    isEditingNoteReminder = false
-                                                    showReminderSheet = true
-                                                },
-                                                onMentionTrigger = { trigger ->
-                                                    activeMentionBlockId = block.id
-                                                    activeMentionTrigger = trigger
-                                                },
-                                                visualTransformation = reminderVisualTransformation
-                                            )
-                                        }
-                                        is EditorBlock.Text -> {
-                                            TextBlockItem(
-                                                block = block,
-                                                currentTheme = currentTheme,
-                                                showPlaceholder = showEmptyPlaceholder,
-                                                isRequestedFocus = requestFocusBlockId == block.id,
-                                                requestedCursorPosition = if (requestFocusBlockId == block.id) requestFocusCursorPosition else null,
-                                                onFocusConsumed = {
-                                                    requestFocusBlockId = null
-                                                    requestFocusCursorPosition = null
-                                                },
-                                                onFocusChanged = { isFocused, cursorOffset ->
-                                                    if (isFocused) {
-                                                        focusedBlockId = block.id
-                                                        lastFocusedBlockId = block.id
-                                                        focusedCursorOffset = cursorOffset
-                                                    } else if (focusedBlockId == block.id) {
-                                                        focusedBlockId = null
-                                                    }
-                                                },
-                                                onTextChange = { newText ->
-                                                    viewModel.updateTextBlock(block.id, newText)
-                                                },
-                                                onReminderClick = { reminder ->
-                                                    activeSelectionContext = null
-                                                    reminderTargetBlockId = null
-                                                    reminderInitialText = reminder.displayText
-                                                    reminderInitialTime = reminder.timestampMillis
-                                                    isEditingNoteReminder = false
-                                                    showReminderSheet = true
-                                                },
-                                                onMentionTrigger = { trigger ->
-                                                    activeMentionBlockId = block.id
-                                                    activeMentionTrigger = trigger
-                                                },
-                                                visualTransformation = reminderVisualTransformation
-                                            )
+                                                }
+                                                is EditorBlock.Text -> {
+                                                    TextBlockItem(
+                                                        block = block,
+                                                        currentTheme = currentTheme,
+                                                        showPlaceholder = showEmptyPlaceholder,
+                                                        isRequestedFocus = requestFocusBlockId == block.id,
+                                                        requestedCursorPosition = if (requestFocusBlockId == block.id) requestFocusCursorPosition else null,
+                                                        onFocusConsumed = {
+                                                            requestFocusBlockId = null
+                                                            requestFocusCursorPosition = null
+                                                        },
+                                                        onFocusChanged = { isFocused, cursorOffset ->
+                                                            if (isFocused) {
+                                                                focusedBlockId = block.id
+                                                                lastFocusedBlockId = block.id
+                                                                focusedCursorOffset = cursorOffset
+                                                            } else if (focusedBlockId == block.id) {
+                                                                focusedBlockId = null
+                                                            }
+                                                        },
+                                                        onTextChange = { newText ->
+                                                            viewModel.updateTextBlock(block.id, newText)
+                                                        },
+                                                        onReminderClick = { reminder ->
+                                                            activeSelectionContext = null
+                                                            reminderTargetBlockId = null
+                                                            reminderInitialText = reminder.displayText
+                                                            reminderInitialTime = reminder.timestampMillis
+                                                            isEditingNoteReminder = false
+                                                            showReminderSheet = true
+                                                        },
+                                                        onMentionTrigger = { trigger ->
+                                                            activeMentionBlockId = block.id
+                                                            activeMentionTrigger = trigger
+                                                        },
+                                                        visualTransformation = reminderVisualTransformation
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -1873,10 +1976,17 @@ internal fun ChecklistItemRow(
     onReminderClick: (() -> Unit)?,
     onMentionTrigger: ((MentionTriggerState?) -> Unit)? = null,
     visualTransformation: VisualTransformation = VisualTransformation.None,
+    canReorder: Boolean = false,
+    isDragging: Boolean = false,
+    onDragStart: ((Float) -> Unit)? = null,
+    onDrag: ((Float) -> Unit)? = null,
+    onDragEnd: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    val view = LocalView.current
+    val focusManager = LocalFocusManager.current
     var isVisible by remember(block.id) { mutableStateOf(true) }
     var isFocused by remember(block.id) { mutableStateOf(false) }
     var isEditing by remember(block.id) { mutableStateOf(false) }
@@ -1936,18 +2046,132 @@ internal fun ChecklistItemRow(
             verticalAlignment = Alignment.Top,
             modifier = modifier
                 .fillMaxWidth()
+                .then(
+                    if (isDragging) {
+                        Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(currentTheme.surface)
+                            .background(currentTheme.accent.copy(alpha = 0.12f))
+                            .border(
+                                width = 1.dp,
+                                color = currentTheme.accent.copy(alpha = 0.35f),
+                                shape = RoundedCornerShape(10.dp)
+                            )
+                    } else {
+                        Modifier
+                    }
+                )
                 .padding(vertical = 4.dp)
         ) {
-        Icon(
-            imageVector = if (block.isChecked) Icons.Outlined.CheckBox else Icons.Outlined.CheckBoxOutlineBlank,
-            contentDescription = if (block.isChecked) "Completed task" else "Incomplete task",
-            tint = if (block.isChecked) currentTheme.textSecondary else currentTheme.accent,
-            modifier = Modifier
-                .padding(top = 2.dp)
-                .size(21.dp)
+        var checkboxCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
+        val currentIsChecked by rememberUpdatedState(block.isChecked)
+        val currentOnCheckedChange by rememberUpdatedState(onCheckedChange)
+        val currentOnDragStart by rememberUpdatedState(onDragStart)
+        val currentOnDrag by rememberUpdatedState(onDrag)
+        val currentOnDragEnd by rememberUpdatedState(onDragEnd)
+
+        val checkboxModifier = if (canReorder && onDragStart != null && onDrag != null && onDragEnd != null) {
+            Modifier
+                .size(width = 29.dp, height = 27.dp)
+                .onGloballyPositioned { checkboxCoords = it }
+                .semantics {
+                    role = Role.Checkbox
+                    stateDescription = if (block.isChecked) "Checked" else "Unchecked"
+                    onClick(label = "Toggle task") {
+                        onCheckedChange(!block.isChecked)
+                        true
+                    }
+                }
+                .pointerInput(block.id, canReorder) {
+                    val touchSlop = viewConfiguration.touchSlop
+                    val longPressTimeoutMs = viewConfiguration.longPressTimeoutMillis
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        var lastPos = down.position
+                        var tapped = false
+                        var cancelled = false
+
+                        val holdResult = withTimeoutOrNull(longPressTimeoutMs) {
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull { it.id == down.id }
+                                if (change == null) {
+                                    cancelled = true
+                                    break
+                                }
+                                lastPos = change.position
+                                if (change.isConsumed) {
+                                    cancelled = true
+                                    break
+                                }
+                                if (!change.pressed) {
+                                    if ((change.position - down.position).getDistance() <= touchSlop) {
+                                        change.consume()
+                                        tapped = true
+                                    } else {
+                                        cancelled = true
+                                    }
+                                    break
+                                }
+                                if ((change.position - down.position).getDistance() > touchSlop) {
+                                    cancelled = true
+                                    break
+                                }
+                            }
+                        }
+
+                        if (tapped) {
+                            currentOnCheckedChange(!currentIsChecked)
+                            return@awaitEachGesture
+                        }
+
+                        if (holdResult == null && !cancelled) {
+                            performChecklistPickupHaptic(view)
+                            focusManager.clearFocus()
+                            val startRootY = checkboxCoords?.takeIf { it.isAttached }?.localToRoot(lastPos)?.y
+                            if (startRootY != null) {
+                                currentOnDragStart?.invoke(startRootY)
+                                try {
+                                    while (true) {
+                                        val event = awaitPointerEvent()
+                                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                        if (!change.pressed) {
+                                            change.consume()
+                                            break
+                                        }
+                                        change.consume()
+                                        val rootY = checkboxCoords?.takeIf { it.isAttached }?.localToRoot(change.position)?.y
+                                        if (rootY != null) {
+                                            currentOnDrag?.invoke(rootY)
+                                        }
+                                    }
+                                } finally {
+                                    currentOnDragEnd?.invoke()
+                                }
+                            }
+                        }
+                    }
+                }
+        } else {
+            Modifier
+                .size(width = 29.dp, height = 27.dp)
                 .clickable { onCheckedChange(!block.isChecked) }
-        )
-        Spacer(modifier = Modifier.width(10.dp))
+        }
+
+        Box(
+            contentAlignment = Alignment.TopStart,
+            modifier = checkboxModifier
+        ) {
+            Icon(
+                imageVector = if (block.isChecked) Icons.Outlined.CheckBox else Icons.Outlined.CheckBoxOutlineBlank,
+                contentDescription = if (block.isChecked) "Completed task" else "Incomplete task",
+                tint = if (isDragging) currentTheme.accent else if (block.isChecked) currentTheme.textSecondary else currentTheme.accent,
+                modifier = Modifier
+                    .padding(top = 2.dp)
+                    .size(21.dp)
+            )
+        }
+        Spacer(modifier = Modifier.width(2.dp))
         Column(
             modifier = Modifier.weight(1f)
         ) {

@@ -57,7 +57,7 @@ fun ShareVideoOptionSheet(
 ) {
     OneUiBottomSheet(
         title = "Summarize Shared Video",
-        subtitle = "100% offline • Max 1 minute",
+        subtitle = "100% offline • Max 3 minutes",
         onDismiss = onDismiss
     ) {
         Column(
@@ -265,7 +265,7 @@ fun ShareVideoOptionSheet(
                             Spacer(modifier = Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = if (isTooLong) "Video exceeds 1-minute limit" else "Unable to read video",
+                                    text = if (isTooLong) "Video exceeds 3-minute limit" else "Unable to read video",
                                     style = OneUi.typography.body,
                                     fontWeight = FontWeight.SemiBold,
                                     color = OneUi.colors.textPrimary
@@ -273,7 +273,7 @@ fun ShareVideoOptionSheet(
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
                                     text = if (isTooLong) {
-                                        "Please share a short video of 60 seconds or less for offline transcription & OCR."
+                                        "Please share a video of 3 minutes or less for offline transcription & OCR."
                                     } else {
                                         "This video format or URI could not be opened on-device."
                                     },
